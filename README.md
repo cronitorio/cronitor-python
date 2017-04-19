@@ -46,23 +46,29 @@ my_monitor = Monitor(api_key='<api_key> or set CRONITOR_API_KEY in env', time_zo
 
 
 # Create monitor
+my_monitor.create(name="unique_monitor_name",
+                    note=note,
+                    notifications=notifications, 
+                    rules=rules, 
+                    tags=tags
+                    )
 
-my_monitor.create(name="unique_monitor_name", note=note, notifications=notifications, rules=rules, tags=tags)
-
-# Update
-
-my_monitor.update(name="unique_monitor_name", note=note, notifications=notifications, rules=rules, tags=tags)
+# Update Monitor
+my_monitor.update(name="unique_monitor_name",
+                    note=note,
+                    notifications=notifications,
+                    rules=rules,
+                    tags=tags,
+                    code='monitor_code'
+                     )
 
 # Delete 
-
 my_monitor.delete("monitor_code")
 
 # Get Monitor 
-
 my_monitor.get("monitor_code")
 
 # Pause
-
 my_monitor.pause("monitor_code", 10) # 10 is total hours monitor should be paused
 
 ```
