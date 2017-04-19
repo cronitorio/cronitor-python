@@ -22,6 +22,7 @@ A Cronitor monitor (hereafter referred to only as a monitor for brevity) is crea
 ```python
 from cronitor.monitor import Monitor
 
+# Notification object
 notifications =  {
     "emails": ['test@example.com'],
     "slack": [],
@@ -30,6 +31,7 @@ notifications =  {
     "webhooks": []
   }
 
+# Rules object
 rules = [
     {
       "rule_type": 'not_run_in',
@@ -38,11 +40,16 @@ rules = [
     }
   ]
   
+# Tags
 tags = ['cron-jobs']
     
+# Notes 
 note = 'A human-friendly description of this monitor'
 
-my_monitor = Monitor(api_key='<api_key> or set CRONITOR_API_KEY in env', time_zone='<timezone> : default is Asia/Kolkata')
+my_monitor = Monitor(
+                    api_key='<api_key> or set CRONITOR_API_KEY in env',
+                    time_zone='<timezone> : default is Asia/Kolkata'
+                    )
 
 
 # Create monitor
