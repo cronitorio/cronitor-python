@@ -82,7 +82,7 @@ my_monitor.pause("monitor_code", 10) # 10 is total hours monitor should be pause
 
 ### Pinging a Monitor
 
-Once you’ve created a monitor and got monitor code, you can continue to use that code to ping the monitor that your task status: `run`, `complete`, or `failed`.
+Once you’ve created a monitor and got monitor code, you can continue to use that code to ping the monitor about your task status: `run`, `complete`, or `failed`.
 
 ```python
 my_monitor.run('<monitor_code>')
