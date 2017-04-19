@@ -5,8 +5,9 @@ import requests
 
 
 class Monitor(object):
-    def __init__(self, api_key=None, time_zone='Asia/Kolkata'):
+    def __init__(self, api_key=None, time_zone='UTC'):
         self.api_endpoint = 'https://cronitor.io/v3/monitors'
+        self.ping_endpoint = "https://cronitor.link"
         self.api_key = api_key or os.getenv('CRONITOR_API_KEY')
         self.timezone = time_zone
 
@@ -43,7 +44,7 @@ class Monitor(object):
                              headers={'content-type': 'application/json'})
 
     def __ping(self, code, method):
-        return self.__get('{}/{}/{}'.format(self.api_endpoint, code, method))
+        return self.__get('{}/{}/{}'.format(self.ping_endpoint, code, method))
 
     def __get(self, url):
         return requests.get(url,
