@@ -5,10 +5,10 @@ import requests
 
 
 class Monitor(object):
-    def __init__(self, api_key=None, time_zone='UTC'):
+    def __init__(self, auth_key=None, time_zone='UTC'):
         self.api_endpoint = 'https://cronitor.io/v3/monitors'
         self.ping_endpoint = "https://cronitor.link"
-        self.api_key = api_key or os.getenv('CRONITOR_API_KEY')
+        self.auth_key = auth_key or os.getenv('CRONITOR_AUTH_KEY')
         self.timezone = time_zone
 
     def create(self, name=None, note=None, notifications=None, rules=None, tags=None):
@@ -39,36 +39,45 @@ class Monitor(object):
 
     def clone(self, code, name=None):
         return requests.post(self.api_endpoint,
-                             auth=(self.api_key, ''),
+                             auth=(self.auth_key, ''),
+                             timeout=10,
                              data=json.dumps({"code": code, name: name}),
                              headers={'content-type': 'application/json'})
 
     def __ping(self, code, method):
-        return self.__get('{}/{}/{}'.format(self.ping_endpoint, code, method))
+        return requests.get(
+            '{}/{}/{}?auth_key={}'.format(self.ping_endpoint, code, method, self.auth_key),
+            timeout=10
+        )
 
     def __get(self, url):
         return requests.get(url,
-                            auth=(self.api_key, ''),
+                            timeout=10,
+                            auth=(self.auth_key, ''),
                             headers={'content-type': 'application/json'}
                             )
 
     def __create(self, payload):
         return requests.post(self.api_endpoint,
-                             auth=(self.api_key, ''),
+                             auth=(self.auth_key, ''),
                              data=json.dumps(payload),
-                             headers={'content-type': 'application/json'})
+                             headers={'content-type': 'application/json'},
+                             timeout=10
+                             )
 
     def __update(self, payload=None, code=None):
         return requests.put('{}/{}'.format(self.api_endpoint, code),
-                            auth=(self.api_key, ''),
+                            auth=(self.auth_key, ''),
                             data=json.dumps(payload),
-                            headers={'content-type': 'application/json'}
+                            headers={'content-type': 'application/json'},
+                            timeout=10
                             )
 
     def __delete(self, code):
         return requests.delete('{}/{}'.format(self.api_endpoint, code),
-                               auth=(self.api_key, ''),
-                               headers={'content-type': 'application/json'}
+                               auth=(self.auth_key, ''),
+                               headers={'content-type': 'application/json'},
+                               timeout=10
                                )
 
     @staticmethod
