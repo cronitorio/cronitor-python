@@ -5,9 +5,10 @@ import requests
 
 
 class Monitor(object):
-    def __init__(self, auth_key=None, time_zone='UTC'):
+    def __init__(self, api_key=None, auth_key=None, time_zone='UTC'):
         self.api_endpoint = 'https://cronitor.io/v3/monitors'
         self.ping_endpoint = "https://cronitor.link"
+        self.api_key = api_key or os.getenv('CRONITOR_API_KEY')
         self.auth_key = auth_key or os.getenv('CRONITOR_AUTH_KEY')
         self.timezone = time_zone
 
@@ -39,7 +40,7 @@ class Monitor(object):
 
     def clone(self, code, name=None):
         return requests.post(self.api_endpoint,
-                             auth=(self.auth_key, ''),
+                             auth=(self.api_key, ''),
                              timeout=10,
                              data=json.dumps({"code": code, name: name}),
                              headers={'content-type': 'application/json'})
@@ -53,13 +54,13 @@ class Monitor(object):
     def __get(self, url):
         return requests.get(url,
                             timeout=10,
-                            auth=(self.auth_key, ''),
+                            auth=(self.api_key, ''),
                             headers={'content-type': 'application/json'}
                             )
 
     def __create(self, payload):
         return requests.post(self.api_endpoint,
-                             auth=(self.auth_key, ''),
+                             auth=(self.api_key, ''),
                              data=json.dumps(payload),
                              headers={'content-type': 'application/json'},
                              timeout=10
@@ -67,7 +68,7 @@ class Monitor(object):
 
     def __update(self, payload=None, code=None):
         return requests.put('{}/{}'.format(self.api_endpoint, code),
-                            auth=(self.auth_key, ''),
+                            auth=(self.api_key, ''),
                             data=json.dumps(payload),
                             headers={'content-type': 'application/json'},
                             timeout=10
@@ -75,7 +76,7 @@ class Monitor(object):
 
     def __delete(self, code):
         return requests.delete('{}/{}'.format(self.api_endpoint, code),
-                               auth=(self.auth_key, ''),
+                               auth=(self.api_key, ''),
                                headers={'content-type': 'application/json'},
                                timeout=10
                                )
