@@ -1,9 +1,5 @@
 from distutils.core import setup
 
-install_requires = [
-    'requests'
-]
-
 setup(
     name='cronitor',
     version='1.0',
@@ -12,6 +8,5 @@ setup(
     license='MIT License',
     author='dkverma',
     author_email='',
-    description='Python wrapper for cronitor monitors',
-    install_requires=install_requires
+    description='Python wrapper for cronitor monitors'
 )
