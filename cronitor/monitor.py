@@ -10,12 +10,12 @@ class Monitor(object):
         self.api_key = api_key or os.getenv('CRONITOR_API_KEY')
         self.timezone = time_zone
 
-    def create(self, name=None, notifications=None, rules=None, tags=None):
-        payload = self.__prepare_payload(tags, name, notifications, rules)
+    def create(self, name=None, note=None, notifications=None, rules=None, tags=None):
+        payload = self.__prepare_payload(tags, name, note, notifications, rules)
         return self.__create(payload=payload)
 
-    def update(self, name=None, code=None, notifications=None, rules=None, tags=None):
-        payload = self.__prepare_payload(tags, name, notifications, rules)
+    def update(self, name=None, code=None, note=None, notifications=None, rules=None, tags=None):
+        payload = self.__prepare_payload(tags, name, note, notifications, rules)
         return self.__update(payload=payload, code=code)
 
     def delete(self, code):
@@ -85,7 +85,7 @@ class Monitor(object):
         else:
             return {}
 
-    def __prepare_payload(self, tags, name, notifications, rules):
+    def __prepare_payload(self, tags, name, note, notifications, rules):
         return {
             "code": "new_monitor",
             "name": "workflow_{}_{}".format(id, name),
@@ -94,5 +94,5 @@ class Monitor(object):
             "notifications": self.__prepare_notifications(notifications),
             "rules": rules or [],
             "tags": tags or [],
-            "note": "Cron tab monitoring for {} workflow".format(name)
+            "note": note
         }
