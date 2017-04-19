@@ -99,7 +99,7 @@ class Monitor(object):
     def __prepare_payload(self, tags, name, note, notifications, rules):
         return {
             "code": "new_monitor",
-            "name": "workflow_{}_{}".format(id, name),
+            "name": name,
             "type": "heartbeat",
             "timezone": self.timezone,
             "notifications": self.__prepare_notifications(notifications),
