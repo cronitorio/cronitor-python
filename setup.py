@@ -1,9 +1,9 @@
-from setuptools import setup
+from setuptools import setup, find_packages
 
 setup(
     name='cronitor',
-    version='1.0.1',
-    packages=[],
+    version='1.0.2',
+    packages=find_packages(),
     url='https://github.com/vy-labs/cronitor',
     license='MIT License',
     author='xrage',
