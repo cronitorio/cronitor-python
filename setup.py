@@ -4,7 +4,7 @@ setup(
     name='cronitor',
     version='1.0',
     packages=[],
-    url='https://github.com/vylabs/cronitor',
+    url='https://github.com/vy-labs/cronitor',
     license='MIT License',
     author='xrage',
     author_email='',
