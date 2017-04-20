@@ -6,7 +6,7 @@ setup(
     packages=[],
     url='https://github.com/vylabs/cronitor',
     license='MIT License',
-    author='dkverma',
+    author='xrage',
     author_email='',
     description='Python wrapper for cronitor monitors',
     install_requires=[
