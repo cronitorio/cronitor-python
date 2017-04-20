@@ -48,7 +48,7 @@ note = 'A human-friendly description of this monitor'
 
 my_monitor = Monitor(
                     api_key='<api_key> or set CRONITOR_API_KEY in env',
-                    time_zone='<timezone> : default is Asia/Kolkata'
+                    time_zone='<timezone> : default is UTC'
                     )
 
 
