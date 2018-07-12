@@ -91,6 +91,32 @@ my_monitor.complete('<monitor_code>')
 my_monitor.failed('<monitor_code>')
 ```
 
+
+### Using from console
+
+```
+
+>> cronitor -h
+
+usage: cronitor [-h] [--authkey AUTHKEY] [--code CODE] [--msg MSG]
+                (--run | --complete | --fail | --pause PAUSE)
+
+Send status messages to Cronitor ping API.
+
+optional arguments:
+  -h, --help            show this help message and exit
+  --authkey AUTHKEY, -a AUTHKEY
+                        Auth Key from Account page
+  --code CODE, -c CODE  Code for Monitor to take action upon
+  --msg MSG, -m MSG     Optional message to send with ping/fail
+  --run, -r             Call ping on given Code
+  --complete, -C        Call complete on given Code
+  --fail, -f            Call fail on given Code
+  --pause PAUSE, -P PAUSE
+                        Call pause on given Code
+```
+
+
 ## Contributing
 
 1. Fork it ( https://github.com/vylabs/cronitor/fork )
