@@ -12,4 +12,5 @@ setup(
     install_requires=[
         'requests',
     ],
+    entry_points=dict(console_scripts=['cronitor = cronitor.monitor:main'])
 )
