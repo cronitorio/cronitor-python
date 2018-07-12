@@ -94,7 +94,7 @@ my_monitor.failed('<monitor_code>')
 
 ### Using from console
 
-```python
+```
 
 >> cronitor -h
 
