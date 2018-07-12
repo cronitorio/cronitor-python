@@ -36,7 +36,7 @@ class Monitor(object):
         return self.__ping(code, 'run', msg=msg)
 
     def complete(self, code, msg=''):
-        return self.__ping(code, 'complete')
+        return self.__ping(code, 'complete', msg=msg)
 
     def failed(self, code, msg=''):
         return self.__ping(code, 'failed', msg=msg)
