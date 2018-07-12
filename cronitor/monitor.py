@@ -153,7 +153,7 @@ def main():
     if args.run:
         ret = monitor.run(args.code, msg=args.msg)
     elif args.fail:
-        ret = monitor.fail(args.code, msg=args.msg)
+        ret = monitor.failed(args.code, msg=args.msg)
     elif args.complete:
         ret = monitor.complete(args.code)
     elif args.pause:
