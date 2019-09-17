@@ -39,7 +39,7 @@ class Monitor(object):
         return self.__ping(code, 'complete', msg=msg)
 
     def failed(self, code, msg=''):
-        return self.__ping(code, 'failed', msg=msg)
+        return self.__ping(code, 'fail', msg=msg)
 
     def pause(self, code, hours):
         return self.__get('{0}/{1}/pause/{2}'.format(self.api_endpoint,
