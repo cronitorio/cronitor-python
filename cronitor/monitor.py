@@ -5,15 +5,17 @@ import os
 
 import requests
 
+PING_API_URL = "https://cronitor.link"
+MONITOR_API_URL = "https://cronitor.io/v3/monitors"
 
 class Monitor(object):
-    def __init__(self, api_key=None, auth_key=None, time_zone='UTC'):
-        self.api_endpoint = 'https://cronitor.io/v3/monitors'
-        self.ping_endpoint = "https://cronitor.link"
+    def __init__(self, id=None, api_key=None, ping_api_key=None, time_zone='UTC'):
+        self.id = id
         self.api_key = api_key or os.getenv('CRONITOR_API_KEY')
-        self.auth_key = auth_key or os.getenv('CRONITOR_AUTH_KEY')
+        self.ping_api_key = ping_api_key or os.getenv('CRONITOR_PING_API_KEY')
         self.timezone = time_zone
 
+    # TODO - IS THIS SEPARATE?
     def create(self, name=None, note=None, notifications=None,
                rules=None, tags=None):
         payload = self.__prepare_payload(tags, name, note,
@@ -30,33 +32,33 @@ class Monitor(object):
         return self.__delete(code)
 
     def get(self, code):
-        return self.__get('{0}/{1}'.format(self.api_endpoint, code))
+        return self.__get('{0}/{1}'.format(MONITOR_API_URL, code))
 
-    def run(self, code, msg=''):
-        return self.__ping(code, 'run', msg=msg)
+    def run(self, msg=''):
+        return self.__ping(self.id, 'run', msg=msg)
 
-    def complete(self, code, msg=''):
-        return self.__ping(code, 'complete', msg=msg)
+    def complete(self, msg=''):
+        return self.__ping(self.id, 'complete', msg=msg)
 
-    def failed(self, code, msg=''):
-        return self.__ping(code, 'fail', msg=msg)
+    def failed(self, msg=''):
+        return self.__ping(self.id, 'fail', msg=msg)
 
     def pause(self, code, hours):
-        return self.__get('{0}/{1}/pause/{2}'.format(self.api_endpoint,
+        return self.__get('{0}/{1}/pause/{2}'.format(MONITOR_API_URL,
                                                      code, hours))
 
     def clone(self, code, name=None):
-        return requests.post(self.api_endpoint,
+        return requests.post(MONITOR_API_URL,
                              auth=(self.api_key, ''),
                              timeout=10,
                              data=json.dumps({"code": code, name: name}),
                              headers={'content-type': 'application/json'})
 
+
     def __ping(self, code, method, msg=''):
-        params = dict(auth_key=self.auth_key, msg=msg)
         return requests.get(
-            '{0}/{1}/{2}'.format(self.ping_endpoint, code, method),
-            params=params,
+            '{0}/{1}/{2}'.format(PING_API_URL, code, method),
+            params=dict(ping_api_key=self.ping_api_key, msg=msg),
             timeout=10
         )
 
@@ -68,7 +70,7 @@ class Monitor(object):
                             )
 
     def __create(self, payload):
-        return requests.post(self.api_endpoint,
+        return requests.post(MONITOR_API_URL,
                              auth=(self.api_key, ''),
                              data=json.dumps(payload),
                              headers={'content-type': 'application/json'},
@@ -76,7 +78,7 @@ class Monitor(object):
                              )
 
     def __update(self, payload=None, code=None):
-        return requests.put('{0}/{1}'.format(self.api_endpoint, code),
+        return requests.put('{0}/{1}'.format(MONITOR_API_URL, code),
                             auth=(self.api_key, ''),
                             data=json.dumps(payload),
                             headers={'content-type': 'application/json'},
@@ -84,7 +86,7 @@ class Monitor(object):
                             )
 
     def __delete(self, code):
-        return requests.delete('{0}/{1}'.format(self.api_endpoint, code),
+        return requests.delete('{0}/{1}'.format(MONITOR_API_URL, code),
                                auth=(self.api_key, ''),
                                headers={'content-type': 'application/json'},
                                timeout=10
