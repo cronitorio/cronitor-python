@@ -1,18 +1,24 @@
-from collections import namedtuple
-
 import json
 import os
-
 import cronitor
 import requests
 
-PING_API_URL = "https://cronitor.link"
-MONITOR_API_URL = "https://cronitor.io/v3/monitors"
+from collections import namedtuple
+from urllib3.util.retry import Retry
+from requests.adapters import HTTPAdapter
+
+
+ping_api_url = lambda id, endpoint: "https://cronitor.link/{}/{}".format(id, endpoint)
+monitor_api_url = lambda id=None:  "https://cronitor.io/v3/monitors/{}".format(id) if id else "https://cronitor.io/v3/monitors"
+
 
 class MonitorNotFound(Exception):
     pass
 
 class MonitorNotCreated(Exception):
+    pass
+
+class MonitorNotUpdated(Exception):
     pass
 
 
@@ -32,7 +38,7 @@ class Monitor(object):
     @classmethod
     def get(cls, id, api_key=None):
         api_key = api_key or cronitor.api_key
-        resp = requests.get('{0}/{1}'.format(MONITOR_API_URL, id),
+        resp = requests.get(monitor_api_url(id),
                             timeout=10,
                             auth=(api_key, ''),
                             headers={'content-type': 'application/json'}).json()
@@ -47,7 +53,7 @@ class Monitor(object):
     def create(cls, **kwargs):
         api_key = kwargs['api_key']if 'api_key' in kwargs else cronitor.api_key
         payload = cls.__prepare_payload(**kwargs)
-        resp = requests.post(MONITOR_API_URL,
+        resp = requests.post(monitor_api_url(),
                              auth=(api_key, ''),
                              data=json.dumps(payload),
                              headers={'content-type': 'application/json'},
@@ -79,62 +85,102 @@ class Monitor(object):
         return {
             "name": name,
             "type": type,
-            # "timezone": timezone,
+            # "timezone": timezone, TODO this was returning invalid TZ for UTC
             "notifications": cls.__prepare_notifications(notifications),
             "rules": rules,
             "tags": tags,
             "note": note
         }
 
-    def __init__(self, id=None, data=None, api_key=None, ping_api_key=None):
+    def __init__(self, id=None, data=None, api_key=None, ping_api_key=None, retry_pings=True):
         data = data if data else {'id': id}
         assert 'id' in data, "You must provide a monitor Id"
 
-        # TODO need to set the full list of attrs not just what's provided
+        # TODO need to set the full list of attrs not just what's provided?
         MonitorData = namedtuple('Monitor', data.keys())
+        self.id = id
         self.data = MonitorData(**data)
         self.api_key = api_key or cronitor.api_key
         self.ping_api_key = ping_api_key or cronitor.ping_api_key
+        self.req = retry_session(retries=5 if retry_pings else 0)
 
     def update(self, name=None, code=None, note=None, notifications=None, rules=None, tags=None):
         payload = self.__prepare_payload(tags, name, note, notifications, rules)
-        return requests.put('{0}/{1}'.format(MONITOR_API_URL, self.data.id),
+        resp = requests.put(monitor_api_url(self.id),
                             auth=(self.api_key, ''),
                             data=json.dumps(payload),
                             headers={'content-type': 'application/json'},
                             timeout=10)
 
+        if resp.status_code != 200:
+            raise MonitorNotUpdated(resp.json())
+
+        MonitorData = namedtuple('Monitor', resp.json().keys())
+        self.data = MonitorData(**resp.json())
+
+
+
     def delete(self):
-        requests.delete('{0}/{1}'.format(MONITOR_API_URL, self.data.id),
-                               auth=(self.api_key, ''),
-                               headers={'content-type': 'application/json'},
-                               timeout=10)
+        return requests.delete(monitor_api_url(self.id),
+                        auth=(self.api_key, ''),
+                        headers={'content-type': 'application/json'},
+                        timeout=10)
 
     def clone(self, id, name=None):
-        return requests.post(MONITOR_API_URL,
+        return requests.post(monitor_api_url(),
                             auth=(self.api_key, ''),
                             timeout=10,
-                            data=json.dumps({"code": self.data.id, name: name}),
+                            data=json.dumps({"code": self.id, name: name}),
                             headers={'content-type': 'application/json'})
 
-    def run(self, msg=''):
-        return self.__ping('run', msg=msg)
 
-    def complete(self, msg=''):
-        return self.__ping('complete', msg=msg)
+    def run(self, params={}):
+        return self.__ping('run', params=params)
 
-    def tick(self, msg=''):
-        return self.__ping('tick', msg=msg)
+    def complete(self, params={}):
+        return self.__ping('complete', params=params)
 
-    def fail(self, msg=''):
-        return self.__ping('fail', msg=msg)
+    def tick(self, params={}):
+        return self.__ping('tick', params=params)
+
+    def ok(self, params={}):
+        return self.__ping('ok', params=params)
+
+    def fail(self, params={}):
+        return self.__ping('fail', params=params)
 
     def pause(self, hours):
-        return self.__get('{0}/{1}/pause/{2}'.format(MONITOR_API_URL, self.data.id, hours))
+        return self.__get('{}/pause/{}'.format(monitor_api_url(self.id), hours))
 
-    def __ping(self, method, msg=''):
-        return requests.get(
-            '{0}/{1}/{2}'.format(PING_API_URL, self.data.id, method),
-            params=dict(ping_api_key=self.ping_api_key, msg=msg),
-            timeout=10)
+    def __ping(self, method, params):
+        return self.req.get(url=ping_api_url(self.id, method), params=self.__clean_params(params), timeout=5)
+
+    def __clean_params(self, params):
+        return {
+            'auth_key': self.ping_api_key,
+            'msg': params.get('message', None),
+            'env': params.get('env', cronitor.environment),
+            'duration': params.get('duration', None),
+            'host': params.get('host', None),
+            'series': params.get('series', None),
+            'count': params.get('count', None),
+            'error_count': params.get('error_count', None)
+        }
+
+
+
+# https://stackoverflow.com/questions/49121365/implementing-retry-for-requests-in-python
+def retry_session(retries, session=None, backoff_factor=0.3):
+    session = session or requests.Session()
+    retry = Retry(
+        total=retries,
+        read=retries,
+        connect=retries,
+        backoff_factor=backoff_factor,
+        method_whitelist=False,
+    )
+    adapter = HTTPAdapter(max_retries=retry)
+    session.mount('http://', adapter)
+    session.mount('https://', adapter)
+    return session
 

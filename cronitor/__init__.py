@@ -3,6 +3,7 @@ from .monitor import Monitor
 
 api_key = os.getenv('CRONITOR_API_KEY', None)
 ping_api_key = os.getenv('CRONITOR_PING_API_KEY', None)
+environment = os.getenv('CRONITOR_ENVIRONMENT', 'production')
 
 def ping(name, schedule=None, rules=[], notifications={}, timezone='utc'):
     def wrapper(func):
