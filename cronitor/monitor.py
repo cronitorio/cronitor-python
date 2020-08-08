@@ -34,20 +34,18 @@ class Monitor(object):
                 pass
         return cls.create(**kwargs)
 
-
     @classmethod
     def get(cls, id, api_key=None):
         api_key = api_key or cronitor.api_key
         resp = requests.get(monitor_api_url(id),
                             timeout=10,
                             auth=(api_key, ''),
-                            headers={'content-type': 'application/json'}).json()
+                            headers={'content-type': 'application/json'})
 
-        if 'id' in resp:
-            return cls(resp['id'], data=resp)
 
-        raise MonitorNotFound("No monitor matching: %s" % id)
-
+        if resp.status_code == 404:
+            raise MonitorNotFound("No monitor matching: %s" % id)
+        return cls(resp['id'], data=resp)
 
     @classmethod
     def create(cls, **kwargs):
@@ -59,11 +57,10 @@ class Monitor(object):
                              headers={'content-type': 'application/json'},
                              timeout=10)
 
-        if resp.status_code == 201:
-            return cls(data=resp.json())
+        if resp.status_code != 201:
+            raise MonitorNotCreated("Unable to create monitor with payload %s" % payload)
 
-        raise MonitorNotCreated("Unable to create monitor with payload %s" % payload)
-
+        return cls(data=resp.json())
 
     @classmethod
     def __prepare_notifications(cls, notifications={}):
