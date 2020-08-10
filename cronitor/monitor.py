@@ -45,7 +45,8 @@ class Monitor(object):
 
         if resp.status_code == 404:
             raise MonitorNotFound("No monitor matching: %s" % id)
-        return cls(resp['id'], data=resp)
+        data = resp.json()
+        return cls(data=data)
 
     @classmethod
     def create(cls, **kwargs):
@@ -63,6 +64,21 @@ class Monitor(object):
         return cls(data=resp.json())
 
     @classmethod
+    def clone(cls, id, name=None, api_key=None):
+        api_key = api_key or cronitor.api_key
+        resp = requests.post(monitor_api_url(),
+                            auth=(api_key, ''),
+                            timeout=10,
+                            data=json.dumps({"code": id, name: name}),
+                            headers={'content-type': 'application/json'})
+
+        if resp.status_code != 201:
+            raise MonitorNotCreated("Unable to clone monitor with id %s" % id)
+
+        return cls(data=resp.json())
+
+
+    @classmethod
     def __prepare_notifications(cls, notifications={}):
         return {
             "emails": notifications.get('emails', []),
@@ -75,31 +91,32 @@ class Monitor(object):
         }
 
     @classmethod
-    def __prepare_payload(cls, tags=[], name='', note=None, notifications={}, rules=[], type='cron', timezone='UTC', schedule=None):
+    def __prepare_payload(cls, tags=[], name='', note=None, notifications={}, rules=[], type='cron', timezone=None, schedule=None):
         if schedule:
             rules.append({'rule_type': 'not_on_schedule', 'value': schedule})
 
         return {
             "name": name,
             "type": type,
-            # "timezone": timezone, TODO this was returning invalid TZ for UTC
+            "timezone": timezone,
             "notifications": cls.__prepare_notifications(notifications),
             "rules": rules,
             "tags": tags,
             "note": note
         }
 
-    def __init__(self, id=None, data=None, api_key=None, ping_api_key=None, retry_pings=True):
-        data = data if data else {'id': id}
-        assert 'id' in data, "You must provide a monitor Id"
+    def __init__(self, id=None, data={}, api_key=None, ping_api_key=None, retry_pings=True):
+        if not id and 'id' not in data:
+            raise MonitorNotFound("You must provide a monitorId")
+        # always include id in the data tuple
+        data.update({'id': id})
 
         # TODO need to set the full list of attrs not just what's provided?
-        MonitorData = namedtuple('Monitor', data.keys())
         self.id = id
-        self.data = MonitorData(**data)
         self.api_key = api_key or cronitor.api_key
         self.ping_api_key = ping_api_key or cronitor.ping_api_key
         self.req = retry_session(retries=5 if retry_pings else 0)
+        self.__set_data(data)
 
     def update(self, name=None, code=None, note=None, notifications=None, rules=None, tags=None):
         payload = self.__prepare_payload(tags, name, note, notifications, rules)
@@ -112,9 +129,7 @@ class Monitor(object):
         if resp.status_code != 200:
             raise MonitorNotUpdated(resp.json())
 
-        MonitorData = namedtuple('Monitor', resp.json().keys())
-        self.data = MonitorData(**resp.json())
-
+        self.__set_data(resp.json())
 
 
     def delete(self):
@@ -122,14 +137,6 @@ class Monitor(object):
                         auth=(self.api_key, ''),
                         headers={'content-type': 'application/json'},
                         timeout=10)
-
-    def clone(self, id, name=None):
-        return requests.post(monitor_api_url(),
-                            auth=(self.api_key, ''),
-                            timeout=10,
-                            data=json.dumps({"code": self.id, name: name}),
-                            headers={'content-type': 'application/json'})
-
 
     def run(self, params={}):
         return self.__ping('run', params=params)
@@ -163,6 +170,10 @@ class Monitor(object):
             'count': params.get('count', None),
             'error_count': params.get('error_count', None)
         }
+
+    def __set_data(self, data):
+        self.data = namedtuple('MonitorData', data.keys())(**data)
+
 
 
 
