@@ -21,17 +21,17 @@ class MonitorPingTests(unittest.TestCase):
 
     def test_ping_api_key(self):
         monitor = cronitor.Monitor(id=FAKE_ID, ping_api_key=FAKE_PING_API_KEY)
-        self.assertDictContainsSubset({'auth_key': FAKE_PING_API_KEY}, monitor._clean_params({}))
+        assert set({'auth_key': FAKE_PING_API_KEY}.items()).issubset(set(monitor._clean_params({}).items()))
 
     def test_message(self):
         monitor = cronitor.Monitor(id=FAKE_ID)
         message = 'a test message'
-        self.assertDictContainsSubset({'msg': message}, monitor._clean_params({'message': message}))
+        assert set({'msg': message}.items()).issubset(set(monitor._clean_params({'message': message}).items()))
 
     def test_environment_param(self):
         cronitor.environment = 'development'
         monitor = cronitor.Monitor(id=FAKE_ID)
-        self.assertDictContainsSubset({'env': 'development'}, monitor._clean_params({}))
+        assert set({'env': 'development'}.items()).issubset(set(monitor._clean_params({}).items()))
 
     @patch('cronitor.Monitor._ping')
     def test_all_params_sent(self, ping):

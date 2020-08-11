@@ -114,8 +114,9 @@ class Monitor(object):
         self.req = retry_session(retries=5 if retry_pings else 0)
         self._set_data(data)
 
-    def update(self, name=None, code=None, note=None, notifications=None, rules=None, tags=None):
-        payload = self.__prepare_payload(tags, name, note, notifications, rules)
+    def update(self, *args, **kwargs):
+        payload = self.data._asdict()
+        payload.update(kwargs)
         resp = requests.put(monitor_api_url(self.id),
                             auth=(self.api_key, ''),
                             data=json.dumps(payload),
@@ -126,6 +127,7 @@ class Monitor(object):
             raise MonitorNotUpdated(resp.json())
 
         self._set_data(resp.json())
+        return self
 
 
     def delete(self):

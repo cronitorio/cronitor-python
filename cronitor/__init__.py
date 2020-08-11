@@ -1,5 +1,5 @@
 import os
-from .monitor import Monitor
+from .monitor import Monitor, MonitorNotFound, MonitorNotCreated, MonitorNotUpdated
 
 api_key = os.getenv('CRONITOR_API_KEY', None)
 ping_api_key = os.getenv('CRONITOR_PING_API_KEY', None)
