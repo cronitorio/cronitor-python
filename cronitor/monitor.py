@@ -42,7 +42,6 @@ class Monitor(object):
                             auth=(api_key, ''),
                             headers={'content-type': 'application/json'})
 
-
         if resp.status_code == 404:
             raise MonitorNotFound("No monitor matching: %s" % id)
         data = resp.json()
@@ -59,7 +58,7 @@ class Monitor(object):
                              timeout=10)
 
         if resp.status_code != 201:
-            raise MonitorNotCreated("Unable to create monitor with payload %s" % payload)
+            raise MonitorNotCreated(resp.json())
 
         return cls(data=resp.json())
 
@@ -108,15 +107,12 @@ class Monitor(object):
     def __init__(self, id=None, data={}, api_key=None, ping_api_key=None, retry_pings=True):
         if not id and 'id' not in data:
             raise MonitorNotFound("You must provide a monitorId")
-        # always include id in the data tuple
-        data.update({'id': id})
 
-        # TODO need to set the full list of attrs not just what's provided?
         self.id = id
         self.api_key = api_key or cronitor.api_key
         self.ping_api_key = ping_api_key or cronitor.ping_api_key
         self.req = retry_session(retries=5 if retry_pings else 0)
-        self.__set_data(data)
+        self._set_data(data)
 
     def update(self, name=None, code=None, note=None, notifications=None, rules=None, tags=None):
         payload = self.__prepare_payload(tags, name, note, notifications, rules)
@@ -129,7 +125,7 @@ class Monitor(object):
         if resp.status_code != 200:
             raise MonitorNotUpdated(resp.json())
 
-        self.__set_data(resp.json())
+        self._set_data(resp.json())
 
 
     def delete(self):
@@ -138,28 +134,28 @@ class Monitor(object):
                         headers={'content-type': 'application/json'},
                         timeout=10)
 
-    def run(self, params={}):
-        return self.__ping('run', params=params)
+    def run(self, *args, **kwargs):
+        return self._ping('run', kwargs)
 
-    def complete(self, params={}):
-        return self.__ping('complete', params=params)
+    def complete(self, *args, **kwargs):
+        return self._ping('complete', kwargs)
 
-    def tick(self, params={}):
-        return self.__ping('tick', params=params)
+    def tick(self, *args, **kwargs):
+        return self._ping('tick', kwargs)
 
-    def ok(self, params={}):
-        return self.__ping('ok', params=params)
+    def ok(self, *args, **kwargs):
+        return self._ping('ok', kwargs)
 
-    def fail(self, params={}):
-        return self.__ping('fail', params=params)
+    def fail(self, *args, **kwargs):
+        return self._ping('fail', kwargs)
 
     def pause(self, hours):
-        return self.__get('{}/pause/{}'.format(monitor_api_url(self.id), hours))
+        return self.req.get(url='{}/pause/{}'.format(monitor_api_url(self.id), hours))
 
-    def __ping(self, method, params):
-        return self.req.get(url=ping_api_url(self.id, method), params=self.__clean_params(params), timeout=5)
+    def _ping(self, method, params):
+        return self.req.get(url=ping_api_url(self.id, method), params=self._clean_params(params), timeout=5)
 
-    def __clean_params(self, params):
+    def _clean_params(self, params):
         return {
             'auth_key': self.ping_api_key,
             'msg': params.get('message', None),
@@ -171,9 +167,11 @@ class Monitor(object):
             'error_count': params.get('error_count', None)
         }
 
-    def __set_data(self, data):
-        self.data = namedtuple('MonitorData', data.keys())(**data)
+    def _set_data(self, data):
+        if 'id' in data and not self.id:
+            self.id = data['id']
 
+        self.data = namedtuple('MonitorData', data.keys())(**data)
 
 
 
