@@ -2,7 +2,7 @@ import argparse
 import os
 import sys
 
-from monitor import Monitor
+from .monitor import Monitor
 
 
 def main():

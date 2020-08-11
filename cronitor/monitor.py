@@ -1,118 +1,194 @@
-from __future__ import print_function
-
 import json
 import os
-
+import cronitor
 import requests
+
+from collections import namedtuple
+from urllib3.util.retry import Retry
+from requests.adapters import HTTPAdapter
+
+
+ping_api_url = lambda id, endpoint: "https://cronitor.link/{}/{}".format(id, endpoint)
+monitor_api_url = lambda id=None:  "https://cronitor.io/v3/monitors/{}".format(id) if id else "https://cronitor.io/v3/monitors"
+
+
+class MonitorNotFound(Exception):
+    pass
+
+class MonitorNotCreated(Exception):
+    pass
+
+class MonitorNotUpdated(Exception):
+    pass
 
 
 class Monitor(object):
-    def __init__(self, api_key=None, auth_key=None, time_zone='UTC'):
-        self.api_endpoint = 'https://cronitor.io/v3/monitors'
-        self.ping_endpoint = "https://cronitor.link"
-        self.api_key = api_key or os.getenv('CRONITOR_API_KEY')
-        self.auth_key = auth_key or os.getenv('CRONITOR_AUTH_KEY')
-        self.timezone = time_zone
 
-    def create(self, name=None, note=None, notifications=None,
-               rules=None, tags=None):
-        payload = self.__prepare_payload(tags, name, note,
-                                         notifications, rules)
-        return self.__create(payload=payload)
+    @classmethod
+    def get_or_create(cls, **kwargs):
+        key = kwargs.get('id', kwargs.get('name', None))
+        if key:
+            try:
+                return cls.get(key)
+            except MonitorNotFound:
+                pass
+        return cls.create(**kwargs)
 
-    def update(self, name=None, code=None, note=None,
-               notifications=None, rules=None, tags=None):
-        payload = self.__prepare_payload(tags, name, note,
-                                         notifications, rules)
-        return self.__update(payload=payload, code=code)
-
-    def delete(self, code):
-        return self.__delete(code)
-
-    def get(self, code):
-        return self.__get('{0}/{1}'.format(self.api_endpoint, code))
-
-    def run(self, code, msg=''):
-        return self.__ping(code, 'run', msg=msg)
-
-    def complete(self, code, msg=''):
-        return self.__ping(code, 'complete', msg=msg)
-
-    def failed(self, code, msg=''):
-        return self.__ping(code, 'fail', msg=msg)
-
-    def pause(self, code, hours):
-        return self.__get('{0}/{1}/pause/{2}'.format(self.api_endpoint,
-                                                     code, hours))
-
-    def clone(self, code, name=None):
-        return requests.post(self.api_endpoint,
-                             auth=(self.api_key, ''),
-                             timeout=10,
-                             data=json.dumps({"code": code, name: name}),
-                             headers={'content-type': 'application/json'})
-
-    def __ping(self, code, method, msg=''):
-        params = dict(auth_key=self.auth_key, msg=msg)
-        return requests.get(
-            '{0}/{1}/{2}'.format(self.ping_endpoint, code, method),
-            params=params,
-            timeout=10
-        )
-
-    def __get(self, url):
-        return requests.get(url,
+    @classmethod
+    def get(cls, id, api_key=None):
+        api_key = api_key or cronitor.api_key
+        resp = requests.get(monitor_api_url(id),
                             timeout=10,
-                            auth=(self.api_key, ''),
-                            headers={'content-type': 'application/json'}
-                            )
+                            auth=(api_key, ''),
+                            headers={'content-type': 'application/json'})
 
-    def __create(self, payload):
-        return requests.post(self.api_endpoint,
-                             auth=(self.api_key, ''),
+        if resp.status_code == 404:
+            raise MonitorNotFound("No monitor matching: %s" % id)
+        data = resp.json()
+        return cls(data=data)
+
+    @classmethod
+    def create(cls, **kwargs):
+        api_key = kwargs['api_key']if 'api_key' in kwargs else cronitor.api_key
+        payload = cls.__prepare_payload(**kwargs)
+        resp = requests.post(monitor_api_url(),
+                             auth=(api_key, ''),
                              data=json.dumps(payload),
                              headers={'content-type': 'application/json'},
-                             timeout=10
-                             )
+                             timeout=10)
 
-    def __update(self, payload=None, code=None):
-        return requests.put('{0}/{1}'.format(self.api_endpoint, code),
+        if resp.status_code != 201:
+            raise MonitorNotCreated(resp.json())
+
+        return cls(data=resp.json())
+
+    @classmethod
+    def clone(cls, id, name=None, api_key=None):
+        api_key = api_key or cronitor.api_key
+        resp = requests.post(monitor_api_url(),
+                            auth=(api_key, ''),
+                            timeout=10,
+                            data=json.dumps({"code": id, name: name}),
+                            headers={'content-type': 'application/json'})
+
+        if resp.status_code != 201:
+            raise MonitorNotCreated("Unable to clone monitor with id %s" % id)
+
+        return cls(data=resp.json())
+
+
+    @classmethod
+    def __prepare_notifications(cls, notifications={}):
+        return {
+            "emails": notifications.get('emails', []),
+            "phones": notifications.get('phones', []),
+            "hipchat": notifications.get('hipchat', []),
+            "pagerduty": notifications.get('pagerduty', []),
+            "slack": notifications.get('slack', []),
+            "templates": notifications.get('templates', []),
+            "webhooks": notifications.get('webhooks', [])
+        }
+
+    @classmethod
+    def __prepare_payload(cls, tags=[], name='', note=None, notifications={}, rules=[], type='cron', timezone=None, schedule=None):
+        if schedule:
+            rules.append({'rule_type': 'not_on_schedule', 'value': schedule})
+
+        return {
+            "name": name,
+            "type": type,
+            "timezone": timezone,
+            "notifications": cls.__prepare_notifications(notifications),
+            "rules": rules,
+            "tags": tags,
+            "note": note
+        }
+
+    def __init__(self, id=None, data={}, api_key=None, ping_api_key=None, retry_pings=True):
+        if not id and 'id' not in data:
+            raise MonitorNotFound("You must provide a monitorId")
+
+        self.id = id
+        self.api_key = api_key or cronitor.api_key
+        self.ping_api_key = ping_api_key or cronitor.ping_api_key
+        self.req = retry_session(retries=5 if retry_pings else 0)
+        self._set_data(data)
+
+    def update(self, *args, **kwargs):
+        payload = self.data._asdict()
+        payload.update(kwargs)
+        resp = requests.put(monitor_api_url(self.id),
                             auth=(self.api_key, ''),
                             data=json.dumps(payload),
                             headers={'content-type': 'application/json'},
-                            timeout=10
-                            )
+                            timeout=10)
 
-    def __delete(self, code):
-        return requests.delete('{0}/{1}'.format(self.api_endpoint, code),
-                               auth=(self.api_key, ''),
-                               headers={'content-type': 'application/json'},
-                               timeout=10
-                               )
+        if resp.status_code != 200:
+            raise MonitorNotUpdated(resp.json())
 
-    @staticmethod
-    def __prepare_notifications(notifications):
-        if notifications:
-            return {
-                "emails": notifications.get('emails', []),
-                "phones": notifications.get('phones', []),
-                "hipchat": notifications.get('hipchat', []),
-                "pagerduty": notifications.get('pagerduty', []),
-                "slack": notifications.get('slack', []),
-                "templates": notifications.get('templates', []),
-                "webhooks": notifications.get('webhooks', [])
-            }
-        else:
-            return {}
+        self._set_data(resp.json())
+        return self
 
-    def __prepare_payload(self, tags, name, note, notifications, rules):
+
+    def delete(self):
+        return requests.delete(monitor_api_url(self.id),
+                        auth=(self.api_key, ''),
+                        headers={'content-type': 'application/json'},
+                        timeout=10)
+
+    def run(self, *args, **kwargs):
+        return self._ping('run', kwargs)
+
+    def complete(self, *args, **kwargs):
+        return self._ping('complete', kwargs)
+
+    def tick(self, *args, **kwargs):
+        return self._ping('tick', kwargs)
+
+    def ok(self, *args, **kwargs):
+        return self._ping('ok', kwargs)
+
+    def fail(self, *args, **kwargs):
+        return self._ping('fail', kwargs)
+
+    def pause(self, hours):
+        return self.req.get(url='{}/pause/{}'.format(monitor_api_url(self.id), hours))
+
+    def _ping(self, method, params):
+        return self.req.get(url=ping_api_url(self.id, method), params=self._clean_params(params), timeout=5)
+
+    def _clean_params(self, params):
         return {
-            "code": "new_monitor",
-            "name": name,
-            "type": "heartbeat",
-            "timezone": self.timezone,
-            "notifications": self.__prepare_notifications(notifications),
-            "rules": rules or [],
-            "tags": tags or [],
-            "note": note
+            'auth_key': self.ping_api_key,
+            'msg': params.get('message', None),
+            'env': params.get('env', cronitor.environment),
+            'duration': params.get('duration', None),
+            'host': params.get('host', None),
+            'series': params.get('series', None),
+            'count': params.get('count', None),
+            'error_count': params.get('error_count', None)
         }
+
+    def _set_data(self, data):
+        if 'id' in data and not self.id:
+            self.id = data['id']
+
+        self.data = namedtuple('MonitorData', data.keys())(**data)
+
+
+
+# https://stackoverflow.com/questions/49121365/implementing-retry-for-requests-in-python
+def retry_session(retries, session=None, backoff_factor=0.3):
+    session = session or requests.Session()
+    retry = Retry(
+        total=retries,
+        read=retries,
+        connect=retries,
+        backoff_factor=backoff_factor,
+        method_whitelist=False,
+    )
+    adapter = HTTPAdapter(max_retries=retry)
+    session.mount('http://', adapter)
+    session.mount('https://', adapter)
+    return session
+
