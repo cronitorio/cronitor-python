@@ -27,6 +27,10 @@ class MonitorTest(unittest.TestCase):
         self.assertEqual(self.monitor.data.rules[0]['rule_type'], 'not_on_schedule')
         self.assertEqual(self.monitor.data.rules[0]['value'], schedule)
 
+        # does not create second monitor with same name
+        _monitor = Monitor.get_or_create(name=name, schedule=schedule)
+        self.assertEqual(_monitor.id, self.monitor.id)
+
     def test_get_or_create(self):
         name = 'Test Get Or Create - Python'
         self.monitor = Monitor.get_or_create(name=name, rules=[{'rule_type': 'not_on_schedule', 'value': '* * * * *'}])
@@ -47,16 +51,18 @@ class MonitorTest(unittest.TestCase):
 class PingDecoratorTests(unittest.TestCase):
     MONITOR_NAME = 'Created By Python Ping Decorator'
 
+    def setUp(self):
+        self.monitor = None
+
     def tearDown(self):
-        monitor = cronitor.Monitor.get(self.MONITOR_NAME)
-        monitor.delete()
+        self.monitor.delete()
 
     def test_ping_wraps_function(self):
         self.function_call()
-        monitor = cronitor.Monitor.get(self.MONITOR_NAME)
-        self.assertEqual(monitor.data.name, self.MONITOR_NAME)
-        self.assertTrue(monitor.data.initialized)
-        self.assertTrue(monitor.data.passing)
+        self.monitor = cronitor.Monitor.get(self.MONITOR_NAME)
+        self.assertEqual(self.monitor.data.name, self.MONITOR_NAME)
+        self.assertTrue(self.monitor.data.initialized)
+        self.assertTrue(self.monitor.data.passing)
 
 
     @ping(MONITOR_NAME, schedule="* * * * *")
