@@ -2,6 +2,7 @@ import os
 import unittest
 from unittest.mock import patch
 from unittest.mock import MagicMock
+from datetime import datetime
 
 from cronitor import ping, Monitor
 import cronitor
@@ -14,7 +15,8 @@ class MonitorTest(unittest.TestCase):
         self.monitor = None
 
     def tearDown(self):
-        if self.monitor: self.monitor.delete()
+        if self.monitor:
+            self.monitor.delete()
 
     def test_requires_monitor_id(self):
         self.assertRaises(cronitor.MonitorNotFound, lambda: Monitor())
@@ -42,7 +44,7 @@ class MonitorTest(unittest.TestCase):
         self.assertRaises(cronitor.MonitorNotCreated, lambda: Monitor.get_or_create())
 
     def test_update_modifies_data(self):
-        self.monitor = Monitor.create(name="Updatable Monitor")
+        self.monitor = Monitor.create(name="Updatable Monitor %s" % str(datetime.today()))
         self.assertEqual(len(self.monitor.data.rules), 0)
         self.monitor.update(rules=[{'rule_type': 'not_on_schedule', 'value': '* * * * *'}])
         self.assertEqual(len(self.monitor.data.rules), 1)
