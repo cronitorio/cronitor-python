@@ -1,5 +1,5 @@
 # Cronitor API Client
-[![Build Status](https://travis-ci.org/cronitorio/cronitor-python.svg?branch=master)
+[![Build Status](https://travis-ci.org/cronitorio/cronitor-python.svg?branch=master)](https://travis-ci.org/cronitorio/cronitor-python)
 
 [Cronitor](https://cronitor.io/) is a service for heartbeat-style monitoring of just about anything that can send an HTTP request.
 

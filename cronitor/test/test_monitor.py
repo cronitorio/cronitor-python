@@ -57,7 +57,8 @@ class PingDecoratorTests(unittest.TestCase):
         self.monitor = None
 
     def tearDown(self):
-        self.monitor.delete()
+        if self.monitor:
+            self.monitor.delete()
 
     def test_ping_wraps_function(self):
         self.function_call()
