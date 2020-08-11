@@ -1,4 +1,5 @@
-# Cronitor
+# Cronitor API Client
+[![Build Status](https://travis-ci.org/cronitorio/cronitor-python.svg?branch=master)
 
 [Cronitor](https://cronitor.io/) is a service for heartbeat-style monitoring of just about anything that can send an HTTP request.
 
@@ -39,11 +40,11 @@ rules = [
       "time_unit": 'seconds'
     }
   ]
-  
+
 # Tags
 tags = ['cron-jobs']
-    
-# Notes 
+
+# Notes
 note = 'A human-friendly description of this monitor'
 
 my_monitor = Monitor(
@@ -56,8 +57,8 @@ my_monitor = Monitor(
 # Create monitor
 my_monitor.create(name="unique_monitor_name",
                     note=note,
-                    notifications=notifications, 
-                    rules=rules, 
+                    notifications=notifications,
+                    rules=rules,
                     tags=tags
                     )
 
@@ -70,10 +71,10 @@ my_monitor.update(name="unique_monitor_name",
                     code='monitor_code'
                      )
 
-# Delete 
+# Delete
 my_monitor.delete("monitor_code")
 
-# Get Monitor 
+# Get Monitor
 my_monitor.get("monitor_code")
 
 # Pause
