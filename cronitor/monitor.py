@@ -11,6 +11,9 @@ from requests.adapters import HTTPAdapter
 ping_api_url = lambda id, endpoint: "https://cronitor.link/{}/{}".format(id, endpoint)
 monitor_api_url = lambda id=None:  "https://cronitor.io/v3/monitors/{}".format(id) if id else "https://cronitor.io/v3/monitors"
 
+api_key = os.getenv('CRONITOR_API_KEY', None)
+ping_api_key = os.getenv('CRONITOR_PING_API_KEY', None)
+environment = os.getenv('CRONITOR_ENVIRONMENT', 'production')
 
 class MonitorNotFound(Exception):
     pass
@@ -35,8 +38,7 @@ class Monitor(object):
         return cls.create(**kwargs)
 
     @classmethod
-    def get(cls, id, api_key=None):
-        api_key = api_key or cronitor.api_key
+    def get(cls, id, api_key=api_key):
         resp = requests.get(monitor_api_url(id),
                             timeout=10,
                             auth=(api_key, ''),
@@ -49,10 +51,9 @@ class Monitor(object):
 
     @classmethod
     def create(cls, **kwargs):
-        api_key = kwargs['api_key']if 'api_key' in kwargs else cronitor.api_key
         payload = cls.__prepare_payload(**kwargs)
         resp = requests.post(monitor_api_url(),
-                             auth=(api_key, ''),
+                             auth=(kwargs.get('api_key', api_key), ''),
                              data=json.dumps(payload),
                              headers={'content-type': 'application/json'},
                              timeout=10)
@@ -63,8 +64,7 @@ class Monitor(object):
         return cls(data=resp.json())
 
     @classmethod
-    def clone(cls, id, name=None, api_key=None):
-        api_key = api_key or cronitor.api_key
+    def clone(cls, id, name=None, api_key=api_key):
         resp = requests.post(monitor_api_url(),
                             auth=(api_key, ''),
                             timeout=10,
@@ -104,13 +104,14 @@ class Monitor(object):
             "note": note
         }
 
-    def __init__(self, id=None, data={}, api_key=None, ping_api_key=None, retry_pings=True):
+    def __init__(self, id=None, data={}, api_key=api_key, ping_api_key=ping_api_key, retry_pings=True, env=environment):
         if not id and 'id' not in data:
             raise MonitorNotFound("You must provide a monitorId")
 
         self.id = id
-        self.api_key = api_key or cronitor.api_key
-        self.ping_api_key = ping_api_key or cronitor.ping_api_key
+        self.api_key = api_key
+        self.ping_api_key = ping_api_key
+        self.env = env
         self.req = retry_session(retries=5 if retry_pings else 0)
         self._set_data(data)
 
@@ -160,8 +161,8 @@ class Monitor(object):
     def _clean_params(self, params):
         return {
             'auth_key': self.ping_api_key,
+            'env': self.env,
             'msg': params.get('message', None),
-            'env': params.get('env', cronitor.environment),
             'duration': params.get('duration', None),
             'host': params.get('host', None),
             'series': params.get('series', None),

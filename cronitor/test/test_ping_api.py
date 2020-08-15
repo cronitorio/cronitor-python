@@ -29,8 +29,7 @@ class MonitorPingTests(unittest.TestCase):
         assert set({'msg': message}.items()).issubset(set(monitor._clean_params({'message': message}).items()))
 
     def test_environment_param(self):
-        cronitor.environment = 'development'
-        monitor = cronitor.Monitor(id=FAKE_ID)
+        monitor = cronitor.Monitor(id=FAKE_ID, env='development')
         assert set({'env': 'development'}.items()).issubset(set(monitor._clean_params({}).items()))
 
     @patch('cronitor.Monitor._ping')
