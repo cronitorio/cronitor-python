@@ -1,3 +1,4 @@
+import logging
 import json
 import os
 import cronitor
@@ -6,13 +7,17 @@ import requests
 from collections import namedtuple
 from urllib3.util.retry import Retry
 from requests.adapters import HTTPAdapter
+from types import MethodType
 
+
+logging.basicConfig()
+logger = logging.getLogger(__name__)
 
 ping_api_url = lambda id, endpoint: "https://cronitor.link/{}/{}".format(id, endpoint)
 monitor_api_url = lambda id=None:  "https://cronitor.io/v3/monitors/{}".format(id) if id else "https://cronitor.io/v3/monitors"
 
 api_key = os.getenv('CRONITOR_API_KEY', None)
-ping_api_key = os.getenv('CRONITOR_PING_API_KEY', None)
+ping_api_key = os.getenv('CRONITOR_PING_API_KEY', '')
 environment = os.getenv('CRONITOR_ENVIRONMENT', 'production')
 
 class MonitorNotFound(Exception):
@@ -51,9 +56,12 @@ class Monitor(object):
 
     @classmethod
     def create(cls, **kwargs):
+        a_key = kwargs.get('api_key', api_key)
+        if 'api_key' in kwargs: del kwargs['api_key']
+
         payload = cls.__prepare_payload(**kwargs)
         resp = requests.post(monitor_api_url(),
-                             auth=(kwargs.get('api_key', api_key), ''),
+                             auth=(a_key, ''),
                              data=json.dumps(payload),
                              headers={'content-type': 'application/json'},
                              timeout=10)
@@ -90,9 +98,10 @@ class Monitor(object):
         }
 
     @classmethod
-    def __prepare_payload(cls, tags=[], name='', note=None, notifications={}, rules=[], type='cron', timezone=None, schedule=None):
+    def __prepare_payload(cls, tags=[], name='', note=None, notifications={}, rules=[], type='task', timezone=None, schedule=None):
         if schedule:
             rules.append({'rule_type': 'not_on_schedule', 'value': schedule})
+            type = 'cron'
 
         return {
             "name": name,
@@ -115,6 +124,25 @@ class Monitor(object):
         self.req = retry_session(retries=5 if retry_pings else 0)
         self._set_data(data)
 
+        # define ping endpoints
+        for endpoint in ('run', 'complete', 'fail', 'tick', 'ok'):
+            def ping_wrapper():
+                ep = endpoint
+                def ping(self, **kwargs):
+                    # we never want a network exception to raise an error in calling code
+                    # return a boolean to that calling code can differentiate between a successful
+                    # or failed ping. it is rare to need to know this information.
+                    try:
+                        self._ping(ep, kwargs)
+                        return True
+                    except Exception as e:
+                        logger.debug(str(e))
+                        return False
+                return ping
+
+            setattr(self, endpoint, MethodType(ping_wrapper(), self))
+
+
     def update(self, *args, **kwargs):
         payload = self.data._asdict()
         payload.update(kwargs)
@@ -132,25 +160,11 @@ class Monitor(object):
 
 
     def delete(self):
-        return requests.delete(monitor_api_url(self.id),
+        return requests.delete(
+                        monitor_api_url(self.id),
                         auth=(self.api_key, ''),
                         headers={'content-type': 'application/json'},
                         timeout=10)
-
-    def run(self, *args, **kwargs):
-        return self._ping('run', kwargs)
-
-    def complete(self, *args, **kwargs):
-        return self._ping('complete', kwargs)
-
-    def tick(self, *args, **kwargs):
-        return self._ping('tick', kwargs)
-
-    def ok(self, *args, **kwargs):
-        return self._ping('ok', kwargs)
-
-    def fail(self, *args, **kwargs):
-        return self._ping('fail', kwargs)
 
     def pause(self, hours):
         return self.req.get(url='{}/pause/{}'.format(monitor_api_url(self.id), hours))
@@ -166,8 +180,9 @@ class Monitor(object):
             'duration': params.get('duration', None),
             'host': params.get('host', None),
             'series': params.get('series', None),
-            'count': params.get('count', None),
-            'error_count': params.get('error_count', None)
+            'stamp': params.get('stamp', None),
+            'metric:count': params.get('count', None),
+            'metric:error_count': params.get('error_count', None)
         }
 
     def _set_data(self, data):

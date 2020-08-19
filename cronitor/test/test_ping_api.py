@@ -16,8 +16,8 @@ class MonitorPingTests(unittest.TestCase):
         endpoints = ['run', 'complete', 'tick', 'fail', 'ok']
 
         for endpoint in endpoints:
-            resp = monitor.__getattribute__(endpoint)()
-            self.assertEqual(resp.status_code, 200)
+            pinged = monitor.__getattribute__(endpoint)()
+            self.assertTrue(pinged)
 
     def test_ping_api_key(self):
         monitor = cronitor.Monitor(id=FAKE_ID, ping_api_key=FAKE_PING_API_KEY)
