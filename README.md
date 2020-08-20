@@ -31,7 +31,7 @@ def main():
 You can attach additional rules to your monitors from the Cronitor UI, or you can pass a `schedule` or `rules` param to create the monitor with the rules following the [Monitor API](http://cronitor.test/docs/monitor-api) specification.
 
 ```python
-@ping("A Python Script", schedule='*/5 * * * Mon-Fri', rules=[{'rule_type': 'ran_longer_than', 'value': 10, 'time_unit': 'hours'}])
+@ping("A Python Script", schedule='*/15 * * * Mon-Fri', rules=[{'rule_type': 'ran_longer_than', 'value': 10, 'time_unit': 'minutes'}])
 def main():
   . . .
 ```
