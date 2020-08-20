@@ -16,9 +16,6 @@ logger = logging.getLogger(__name__)
 ping_api_url = lambda id, endpoint: "https://cronitor.link/{}/{}".format(id, endpoint)
 monitor_api_url = lambda id=None:  "https://cronitor.io/v3/monitors/{}".format(id) if id else "https://cronitor.io/v3/monitors"
 
-api_key = os.getenv('CRONITOR_API_KEY', None)
-ping_api_key = os.getenv('CRONITOR_PING_API_KEY', '')
-environment = os.getenv('CRONITOR_ENVIRONMENT', 'production')
 
 class MonitorNotFound(Exception):
     pass
@@ -31,6 +28,9 @@ class MonitorNotUpdated(Exception):
 
 
 class Monitor(object):
+    api_key = os.getenv('CRONITOR_API_KEY', None)
+    ping_api_key = os.getenv('CRONITOR_PING_API_KEY', '')
+    environment = os.getenv('CRONITOR_ENVIRONMENT', 'production')
 
     @classmethod
     def get_or_create(cls, **kwargs):
@@ -43,7 +43,8 @@ class Monitor(object):
         return cls.create(**kwargs)
 
     @classmethod
-    def get(cls, id, api_key=api_key):
+    def get(cls, id, api_key=None):
+        api_key = api_key or Monitor.api_key
         resp = requests.get(monitor_api_url(id),
                             timeout=10,
                             auth=(api_key, ''),
@@ -56,7 +57,7 @@ class Monitor(object):
 
     @classmethod
     def create(cls, **kwargs):
-        a_key = kwargs.get('api_key', api_key)
+        a_key = kwargs.get('api_key', Monitor.api_key)
         if 'api_key' in kwargs: del kwargs['api_key']
 
         payload = cls.__prepare_payload(**kwargs)
@@ -72,7 +73,8 @@ class Monitor(object):
         return cls(data=resp.json())
 
     @classmethod
-    def clone(cls, id, name=None, api_key=api_key):
+    def clone(cls, id, name=None, api_key=None):
+        api_key = api_key or Monitor.api_key
         resp = requests.post(monitor_api_url(),
                             auth=(api_key, ''),
                             timeout=10,
@@ -102,6 +104,8 @@ class Monitor(object):
         if schedule:
             rules.append({'rule_type': 'not_on_schedule', 'value': schedule})
             type = 'cron'
+        elif list(filter(lambda r: r['rule_type'] == 'not_on_schedule', rules)):
+            type = 'cron'
 
         return {
             "name": name,
@@ -113,15 +117,15 @@ class Monitor(object):
             "note": note
         }
 
-    def __init__(self, id=None, data={}, api_key=api_key, ping_api_key=ping_api_key, retry_pings=True, env=environment):
+    def __init__(self, id=None, data={}, api_key=None, ping_api_key=None, retry_count=3, env=environment):
         if not id and 'id' not in data:
             raise MonitorNotFound("You must provide a monitorId")
 
         self.id = id
-        self.api_key = api_key
-        self.ping_api_key = ping_api_key
+        self.api_key = api_key or Monitor.api_key
+        self.ping_api_key = ping_api_key or Monitor.ping_api_key
         self.env = env
-        self.req = retry_session(retries=5 if retry_pings else 0)
+        self.req = retry_session(retries=retry_count)
         self._set_data(data)
 
         # define ping endpoints
@@ -174,11 +178,11 @@ class Monitor(object):
 
     def _clean_params(self, params):
         return {
-            'auth_key': self.ping_api_key,
+            'auth_key': params.get('ping_api_key', self.ping_api_key),
             'env': self.env,
             'msg': params.get('message', None),
             'duration': params.get('duration', None),
-            'host': params.get('host', None),
+            'host': params.get('host', os.getenv('COMPUTERNAME', None)),
             'series': params.get('series', None),
             'stamp': params.get('stamp', None),
             'metric:count': params.get('count', None),
