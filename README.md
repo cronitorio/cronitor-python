@@ -26,17 +26,12 @@ from cronitor import ping
 def main():
   print("running...")
 ```
-`Nota Bene`: The example above assumes a `CRONITOR_API_KEY` environment variable is present. You can also pass your API key as param to the ping decorator `@ping("foo" api_key='cronitor-api-key')`. More on authentication below.
+`Nota Bene`: The example above assumes a `CRONITOR_API_KEY` environment variable is present. You can also pass your API key as param to the ping decorator `api_key='cronitor-api-key'`. More on authentication below.
 
-By default no rules are created for the monitor beyond the default of alerting on a `fail` ping (an exception). You can attach additional rules from the Cronitor UI, or you can pass a `schedule` param or `rules` list to create the monitor with the corresponding rules that match the [Monitor API](http://cronitor.test/docs/monitor-api) specification.
+You can attach additional rules to your monitors from the Cronitor UI, or you can pass a `schedule` or `rules` param to create the monitor with the rules following the [Monitor API](http://cronitor.test/docs/monitor-api) specification.
 
 ```python
-@ping("A Python Script", schedule='*/5 * * * Mon-Fri')
-def main():
-  . . .
-
-
-@ping("A Python Script", rules=[{'rule_type': 'ran_longer_than', 'value': 10, 'time_unit': 'hours'}])
+@ping("A Python Script", schedule='*/5 * * * Mon-Fri', rules=[{'rule_type': 'ran_longer_than', 'value': 10, 'time_unit': 'hours'}])
 def main():
   . . .
 ```
@@ -47,10 +42,10 @@ A monitor object can also be imported and has "ping" methods that map to the end
 from cronitor import Monitor
 
 monitor = Monitor('d3x01') # Monitor ID (aka code)
-monitor.run()
-monitor.complete()
-monitor.fail()
-monitor.ok()
+monitor.run() # job has started
+monitor.complete() # job has finished
+monitor.fail() # job has failed
+monitor.ok() # manual reset to passing state
 ```
 
 All ping methods accept the following optional keyword arguments:
