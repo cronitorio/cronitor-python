@@ -36,27 +36,10 @@ def main():
   . . .
 
 
-<<<<<<< HEAD
-# Rules object
-rules = [
-    {
-      "rule_type": 'not_run_in',
-      "duration": 5,
-      "time_unit": 'seconds'
-    }
-  ]
-
-# Tags
-tags = ['cron-jobs']
-
-# Notes
-note = 'A human-friendly description of this monitor'
-=======
 @ping("A Python Script", rules=[{'rule_type': 'ran_longer_than', 'value': 10, 'time_unit': 'hours'}])
 def main():
   . . .
 ```
->>>>>>> 2660c64... readme updates and final tweaks
 
 A monitor object can also be imported and has "ping" methods that map to the endpoints of the [Ping API](https://cronitor.io/docs/ping-api).
 
@@ -70,17 +53,7 @@ monitor.fail()
 monitor.ok()
 ```
 
-<<<<<<< HEAD
-# Create monitor
-my_monitor.create(name="unique_monitor_name",
-                    note=note,
-                    notifications=notifications,
-                    rules=rules,
-                    tags=tags
-                    )
-=======
 All ping methods accept the following optional keyword arguments:
->>>>>>> 2660c64... readme updates and final tweaks
 
 - `message`: A message you would like associated with this ping event. This is displayed in the Cronitor UI as well as on alerts.
 - `stamp`: A timestamp associated with the ping. When not present Cronitor creates the stamp at the time of system ingress.
@@ -90,16 +63,8 @@ All ping methods accept the following optional keyword arguments:
 - `host`: The server host name that this program is running on.
 - `ping_api_key`: If you have enabled ping authentication for your account you can pass the api key on each call, or, better, instantiate the monitor object with one `Monitor(id='d3x01', ping_api_key='1234567890'). Even better, set `CRONITOR_PING_API_KEY` as an environment variable.
 
-<<<<<<< HEAD
-# Delete
-my_monitor.delete("monitor_code")
-
-# Get Monitor
-my_monitor.get("monitor_code")
-=======
 
 ### Monitor CRUD
->>>>>>> 2660c64... readme updates and final tweaks
 
 You can also perform all of the standard CRUD operations on a monitor. You will need a [monitor API key](https://cronitor.io/settings#integrations). The following map to the REST endpoints of the [Monitor API](http://cronitor.test/docs/monitor-api).
 
