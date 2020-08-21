@@ -96,3 +96,5 @@ ENV/
 .ropeproject
 .idea
 
+#VSCode
+.vscode
