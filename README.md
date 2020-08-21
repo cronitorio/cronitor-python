@@ -17,7 +17,7 @@ pip install cronitor
 
 ### Monitor Any Python Function
 
-The ping decorator will automatically provision a monitor with the provided name the first time it is run. It wraps the given function with `run` and `/`complete` calls on start and finish, and pings `fail` if an exception is thrown.
+The ping decorator will automatically provision a monitor with the provided name the first time it is run. It wraps the given function with `run` and `complete` calls on start and finish, and pings `fail` if an exception is thrown.
 
 ```python
 from cronitor import ping
