@@ -26,7 +26,7 @@ def ping(name, schedule=None, rules=[], notifications={}, timezone=None, api_key
 
             try:
                 monitor = Monitor.get_or_create(**create_args)
-            except MonitorNotCreated as e:
+            except Exception as e:
                 logger.debug(str(e))
                 return func(*args, **kwargs)
 

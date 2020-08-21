@@ -35,9 +35,10 @@ class Monitor(object):
     @classmethod
     def get_or_create(cls, **kwargs):
         key = kwargs.get('id', kwargs.get('name', None))
+        api_key = kwargs.get('api_key', None)
         if key:
             try:
-                return cls.get(key)
+                return cls.get(key, api_key=api_key)
             except MonitorNotFound:
                 pass
         return cls.create(**kwargs)
