@@ -16,8 +16,8 @@ class MonitorPingTests(unittest.TestCase):
         endpoints = ['run', 'complete', 'tick', 'fail', 'ok']
 
         for endpoint in endpoints:
-            resp = monitor.__getattribute__(endpoint)()
-            self.assertEqual(resp.status_code, 200)
+            pinged = monitor.__getattribute__(endpoint)()
+            self.assertTrue(pinged)
 
     def test_ping_api_key(self):
         monitor = cronitor.Monitor(id=FAKE_ID, ping_api_key=FAKE_PING_API_KEY)
@@ -29,8 +29,7 @@ class MonitorPingTests(unittest.TestCase):
         assert set({'msg': message}.items()).issubset(set(monitor._clean_params({'message': message}).items()))
 
     def test_environment_param(self):
-        cronitor.environment = 'development'
-        monitor = cronitor.Monitor(id=FAKE_ID)
+        monitor = cronitor.Monitor(id=FAKE_ID, env='development')
         assert set({'env': 'development'}.items()).issubset(set(monitor._clean_params({}).items()))
 
     @patch('cronitor.Monitor._ping')

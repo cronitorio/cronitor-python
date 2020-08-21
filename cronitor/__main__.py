@@ -8,9 +8,14 @@ from .monitor import Monitor
 def main():
     parser = argparse.ArgumentParser(prog="cronitor",
                                      description='Send status messages to Cronitor ping API.')  # noqa
-    parser.add_argument('--authkey', '-a', type=str,
-                        default=os.getenv('CRONITOR_AUTH_KEY'),
+    parser.add_argument('--pingApiKey', '-a', type=str,
+                        default=os.getenv('CRONITOR_PING_API_KEY', os.getenv('CRONITOR_AUTH_KEY')),
                         help='Auth Key from Account page')
+    parser.add_argument('--id', '-i', type=str,
+                        default=os.getenv('CRONITOR_CODE', os.getenv('CRONITOR_ID')),
+                        help='Id for Monitor to take action upon')
+
+    # alias for id. deprecated.
     parser.add_argument('--code', '-c', type=str,
                         default=os.getenv('CRONITOR_CODE'),
                         help='Code for Monitor to take action upon')
@@ -29,21 +34,21 @@ def main():
 
     args = parser.parse_args()
 
-    if args.code is None:
-        print('A code must be supplied or CRONITOR_CODE ENV var used')
+    if args.code and args.id is None:
+        print('A code/id must be supplied or CRONITOR_CODE ENV var used')
         parser.print_help()
         sys.exit(1)
 
-    monitor = Monitor(auth_key=args.authkey)
+    monitor = Monitor(id=args.id, ping_api_key=args.pingApiKey)
 
     if args.run:
-        ret = monitor.run(args.code, msg=args.msg)
+        ret = monitor.run(message=args.msg)
     elif args.fail:
-        ret = monitor.failed(args.code, msg=args.msg)
+        ret = monitor.failed(message=args.msg)
     elif args.complete:
-        ret = monitor.complete(args.code)
+        ret = monitor.complete(message=args.msg)
     elif args.pause:
-        ret = monitor.pause(args.code, args.pause)
+        ret = monitor.pause(args.pause)
 
     return ret.raise_for_status()
 

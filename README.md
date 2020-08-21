@@ -1,99 +1,139 @@
 # Cronitor API Client
 [![Build Status](https://travis-ci.org/cronitorio/cronitor-python.svg?branch=master)](https://travis-ci.org/cronitorio/cronitor-python)
 
-[Cronitor](https://cronitor.io/) is a service for heartbeat-style monitoring of just about anything that can send an HTTP request.
+[Cronitor](https://cronitor.io/) is a monitoring cron jobs, pipelines, daemons, or any other system that can make or receive HTTP requests.
 
-This library provides a simple abstraction for the creation and pinging of a Cronitor monitor. For a better understanding of the API this module talks to, please see [How Cronitor Works](https://cronitor.io/help/how-cronitor-works).
+This Python library provides convenient access to the Cronitor API from applications written in the Python language. If you are unfamiliar with Cronitor, read our [Cron Monitoring](https://cronitor.io/docs/cron-job-monitoring) or [Heartbeat Monitoring](https://cronitor.io/docs/heartbeat-monitoring) guide to learn more.
+
 
 ## Installation
-
 
 ```
 pip install cronitor
 ```
 
 
+## Module Usage
 
-## Usage
+### Monitor Any Python Function
 
-### Creating a Monitor
-
-A Cronitor monitor (hereafter referred to only as a monitor for brevity) is created if it does not already exist and response object will be returned.
+The ping decorator will automatically provision a monitor with the provided name the first time it is run. It wraps the given function with `run` and `/`complete` calls on start and finish, and pings `fail` if an exception is thrown.
 
 ```python
-from cronitor.monitor import Monitor
+from cronitor import ping
 
-# Notification object
+@ping("A Python Script")
+def main():
+  print("running...")
+```
+`Nota Bene`: The example above assumes a `CRONITOR_API_KEY` environment variable is present. You can also pass your API key as param to the ping decorator `api_key='cronitor-api-key'`. More on authentication below.
+
+You can attach additional rules to your monitors from the Cronitor UI, or you can pass a `schedule` or `rules` param to create the monitor with the rules following the [Monitor API](http://cronitor.test/docs/monitor-api) specification.
+
+```python
+@ping("A Python Script", schedule='*/15 * * * Mon-Fri', rules=[{'rule_type': 'ran_longer_than', 'value': 10, 'time_unit': 'minutes'}])
+def main():
+  . . .
+```
+
+A monitor object can also be imported and has "ping" methods that map to the endpoints of the [Ping API](https://cronitor.io/docs/ping-api).
+
+```python
+from cronitor import Monitor
+
+monitor = Monitor('d3x01') # Monitor ID (aka code)
+monitor.run() # job has started
+monitor.complete() # job has finished
+monitor.fail() # job has failed
+monitor.ok() # manual reset to passing state
+```
+
+All ping methods accept the following optional keyword arguments:
+
+- `message`: A message you would like associated with this ping event. This is displayed in the Cronitor UI as well as on alerts.
+- `stamp`: A timestamp associated with the ping. When not present Cronitor creates the stamp at the time of system ingress.
+- `duration`: Ignored on all pings except `complete`. Your own custom duration calculation. By default will construct one using `run` and `complete` timestamps.
+- `series`: A unique identifier for a pair of run and complete pings. This is useful if your monitor is running on a distributed system and there are many instances pinging simultaneously as it allows cronitor to correctly match the pings.
+- `env`: The environment this monitor is running in. Default value is `production`
+- `host`: The server host name that this program is running on.
+- `ping_api_key`: If you have enabled ping authentication for your account you can pass the api key on each call, or, better, instantiate the monitor object with one `Monitor(id='d3x01', ping_api_key='1234567890'). Even better, set `CRONITOR_PING_API_KEY` as an environment variable.
+
+
+### Monitor CRUD
+
+You can also perform all of the standard CRUD operations on a monitor. You will need a [monitor API key](https://cronitor.io/settings#integrations). The following map to the REST endpoints of the [Monitor API](http://cronitor.test/docs/monitor-api).
+
+```python
+from cronitor import Monitor
+
+# In order to authenticate to cronitor you can set an ENV var
+# CRONITOR_API_KEY='cronitor-api-key'
+#
+# or set your api_key as an attribute of the Monitor class
+Monitor.api_key = 'cronitor-api-key'
+#
+# or pass it as a keyword param to get, create, update, or delete
+Monitor.get('My Cron Monitor', api_key='cronitor-api-key')
+
+# monitor look up
+monitor = Monitor.get('My Cron Monitor') # by name
+monitor = Monitor.get('d3x01') # by monitorId
+
+# create monitor with the provided schedule if no monitor is found matching the name
+monitor = Monitor.get_or_create(name="Daily Cron Job", schedule="0 0 * * *")
+
+# create a monitor
+monitor = Monitor.create(name="Daily Cron Job", schedule="0 0 * * *")
+
+# access data attributes
+print(monitor.data.name) # "Daily Cron Job"
+print(monitor.data.status) # "Waiting for first ping"
+
+# update a monitor
+monitor.update(name="Sunday At Midnight Cron", schedule="0 0 * * SUN")
+
+# delete a monitor
+monitor.delete()
+```
+
+Monitors can be created and updated with following optional keyword arguments
+
+- `schedule: str`: A convenient way to add a `not_on_schedule` rule (cron expression) to your monitor
+- `rules: List[Dict]`: Rules to set beyond default 'failure' rule. e.g `[{'rule_type': 'ran_longer_than', 'value': 2, 'time_unit': 'hours'}]
+- `notifications: Dict`: Where to send alerts. See examples below for list of options
+- `tags: List`: A way to group similar monitors together. Use as desired
+- `note: str`: A note displayed on the Cronitor UI and on alerts in the case of failure.
+- `timezone: str`: The timezone this program is running in. Defaults to account setting, which defaults to `UTC`
+
+```python
+
 notifications =  {
-    "emails": ['test@example.com'],
-    "slack": [],
-    "pagerduty": [],
-    "phones": [],
-    "webhooks": []
+    'emails': ['test@example.com'],
+    'phones': ['+15555555555],
+    'slack': [ 'slack-identifier'], # found https://cronitor.io/settings#integrations
+    'pagerduty': ['pd-identifier'],
+    'victorops': ['vc-identifier']
+    'teams': ['teams-identifier']
+    'webhooks': ['https://example.com/webhooks/incoming']
   }
 
-# Rules object
 rules = [
     {
       "rule_type": 'not_run_in',
       "duration": 5,
-      "time_unit": 'seconds'
+      "time_unit": 'minutes'
     }
   ]
 
-# Tags
 tags = ['cron-jobs']
 
-# Notes
+# Note: String
 note = 'A human-friendly description of this monitor'
 
-my_monitor = Monitor(
-                    api_key='<api_key> or set CRONITOR_API_KEY in env',
-                    auth_key='<api_key> or set CRONITOR_AUTH_KEY in env',
-                    time_zone='<timezone> : default is UTC'
-                    )
-
-
-# Create monitor
-my_monitor.create(name="unique_monitor_name",
-                    note=note,
-                    notifications=notifications,
-                    rules=rules,
-                    tags=tags
-                    )
-
-# Update Monitor
-my_monitor.update(name="unique_monitor_name",
-                    note=note,
-                    notifications=notifications,
-                    rules=rules,
-                    tags=tags,
-                    code='monitor_code'
-                     )
-
-# Delete
-my_monitor.delete("monitor_code")
-
-# Get Monitor
-my_monitor.get("monitor_code")
-
-# Pause
-my_monitor.pause("monitor_code", 10) # 10 is total hours monitor should be paused
-
-```
-
-### Pinging a Monitor
-
-Once you’ve created a monitor and got monitor code, you can continue to use that code to ping the monitor about your task status: `run`, `complete`, or `failed`.
-
-```python
-my_monitor.run('<monitor_code>')
-my_monitor.complete('<monitor_code>')
-my_monitor.failed('<monitor_code>')
 ```
 
 
-### Using from console
+## Console Usage
 
 ```
 

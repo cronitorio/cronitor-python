@@ -1,22 +1,50 @@
 import os
+from datetime import datetime
+from random import random
 from .monitor import Monitor, MonitorNotFound, MonitorNotCreated, MonitorNotUpdated
+import logging
 
-api_key = os.getenv('CRONITOR_API_KEY', None)
-ping_api_key = os.getenv('CRONITOR_PING_API_KEY', None)
-environment = os.getenv('CRONITOR_ENVIRONMENT', 'production')
+logging.basicConfig()
+logger = logging.getLogger(__name__)
 
-def ping(name, schedule=None, rules=[], notifications={}, timezone=None):
+def ping(name, schedule=None, rules=[], notifications={}, timezone=None, api_key=None, type=None):
     def wrapper(func):
+
         def wrapped(*args, **kwargs):
-            monitor = Monitor.get_or_create(name=name, schedule=schedule, rules=rules, notifications=notifications, timezone=timezone)
-            monitor.run()
+            create_args = {
+                'name':name,
+                'schedule':schedule,
+                'rules':rules,
+                'notifications':notifications,
+                'timezone':timezone,}
+
+            if api_key:
+                create_args['api_key'] = api_key
+
+            if type:
+                create_args['type'] = type
+
+            try:
+                monitor = Monitor.get_or_create(**create_args)
+            except Exception as e:
+                logger.debug(str(e))
+                return func(*args, **kwargs)
+
+            start = datetime.now().timestamp()
+            monitor.run(stamp=start, series=start)
+
             try:
                 out = func(*args, **kwargs)
             except Exception as e:
-                monitor.fail(str(e))
+                monitor.fail(message=str(e))
                 raise e
-            monitor.complete()
+
+            end = datetime.now().timestamp()
+            duration = end - start
+
+            monitor.complete(stamp=end, duration=duration, series=start)
             return out
+
         return wrapped
     return wrapper
 

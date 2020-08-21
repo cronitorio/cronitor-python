@@ -7,8 +7,6 @@ from datetime import datetime
 from cronitor import ping, Monitor
 import cronitor
 
-cronitor.api_key = os.environ.get("CRONITOR_API_KEY", None)
-
 class MonitorTest(unittest.TestCase):
 
     def setUp(self):
