@@ -63,7 +63,7 @@ class PingDecoratorTests(unittest.TestCase):
         self.function_call()
         self.monitor = cronitor.Monitor.get(self.MONITOR_NAME)
         self.assertEqual(self.monitor.data.name, self.MONITOR_NAME)
-        time.sleep(500)
+        time.sleep(0.5)
         self.assertTrue(self.monitor.data.initialized)
         self.assertTrue(self.monitor.data.passing)
 
