@@ -1,5 +1,6 @@
 import os
 import unittest
+import time
 from unittest.mock import patch
 from unittest.mock import MagicMock
 from datetime import datetime
@@ -62,6 +63,7 @@ class PingDecoratorTests(unittest.TestCase):
         self.function_call()
         self.monitor = cronitor.Monitor.get(self.MONITOR_NAME)
         self.assertEqual(self.monitor.data.name, self.MONITOR_NAME)
+        time.sleep(500)
         self.assertTrue(self.monitor.data.initialized)
         self.assertTrue(self.monitor.data.passing)
 

@@ -2,13 +2,13 @@ from setuptools import setup, find_packages
 
 setup(
     name='cronitor',
-    version='2.0.1',
+    version='2.0.2',
     packages=find_packages(),
     url='https://github.com/cronitorio/cronitor-python',
     license='MIT License',
     author='aflanagan',
     author_email='',
-    description='Python wrapper for Cronitor\'s Monitor and Ping APIs.',
+    description='A lightweight Python client for Cronitor\'s API.',
     install_requires=[
         'requests',
     ],
