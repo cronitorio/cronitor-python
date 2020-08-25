@@ -1,4 +1,5 @@
 import os
+from functools import wraps
 from datetime import datetime
 from random import random
 from .monitor import Monitor, MonitorNotFound, MonitorNotCreated, MonitorNotUpdated
@@ -9,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 def ping(name, schedule=None, rules=[], notifications={}, timezone=None, api_key=None, type=None):
     def wrapper(func):
-
+        @wraps(func)
         def wrapped(*args, **kwargs):
             create_args = {
                 'name':name,
