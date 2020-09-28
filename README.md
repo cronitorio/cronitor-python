@@ -76,7 +76,7 @@ monitor = Monitor.get('My Cron Monitor') # by name
 monitor = Monitor.get('d3x01') # by monitorId
 
 # create monitor with the provided schedule if no monitor is found matching the name
-monitor = Monitor.get_or_create(name="Daily Cron Job", schedule="0 0 * * *")
+monitor = Monitor.get_or_create("Daily Cron Job", schedule="0 0 * * *")
 
 # create a monitor
 monitor = Monitor.create(name="Daily Cron Job", schedule="0 0 * * *")
