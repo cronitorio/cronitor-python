@@ -28,15 +28,10 @@ def main():
 ```
 `Nota Bene`: The example above assumes a `CRONITOR_API_KEY` environment variable is present. You can also pass your API key as param to the ping decorator `api_key='cronitor-api-key'`. More on authentication below.
 
-You can attach additional rules to your monitors from the Cronitor UI, or you can pass a `schedule` or `rules` param to create the monitor with the rules following the [Monitor API](http://cronitor.test/docs/monitor-api) specification.
+By default you will be alerted whenever an unhandled exception is raised, and you can attach additional rules to your monitors from the Cronitor dashboard.
 
-```python
-@ping("A Python Script", schedule='*/15 * * * Mon-Fri', rules=[{'rule_type': 'ran_longer_than', 'value': 10, 'time_unit': 'minutes'}])
-def main():
-  . . .
-```
 
-A monitor object can also be imported and has "ping" methods that map to the endpoints of the [Ping API](https://cronitor.io/docs/ping-api).
+A monitor object can also be imported and has methods that map to the endpoints of the [Ping API](https://cronitor.io/docs/ping-api).
 
 ```python
 from cronitor import Monitor
@@ -44,7 +39,8 @@ from cronitor import Monitor
 monitor = Monitor('d3x01') # Monitor ID (aka code)
 monitor.run() # job has started
 monitor.complete() # job has finished
-monitor.fail() # job has failed
+monitor.fail() # job has failed/failure event
+monitor.tick() # event has occurred
 monitor.ok() # manual reset to passing state
 ```
 

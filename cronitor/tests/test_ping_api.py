@@ -3,6 +3,7 @@ import unittest
 from unittest.mock import patch
 from unittest.mock import MagicMock
 
+from cronitor import ping, Monitor
 import cronitor
 
 # a reserved monitorId for running integration tests against cronitor.link
@@ -32,26 +33,28 @@ class MonitorPingTests(unittest.TestCase):
         monitor = cronitor.Monitor(id=FAKE_ID, env='development')
         assert set({'env': 'development'}.items()).issubset(set(monitor._clean_params({}).items()))
 
+    def test_ping_url_with_monitor_id(self):
+        monitor = cronitor.Monitor(id=FAKE_ID)
+        assert monitor.ping_url('run') == 'https://cronitor.link/{}/{}'.format(FAKE_ID, 'run')
+
+    def test_ping_url_with_user_supplied_key(self):
+        monitor = cronitor.Monitor(key=FAKE_ID, ping_api_key=FAKE_PING_API_KEY)
+        assert monitor.ping_url('run') == "https://cronitor.link/ping/{}/{}/{}".format(FAKE_PING_API_KEY, FAKE_ID, 'run')
+
     @patch('cronitor.Monitor._ping')
     def test_all_params_sent(self, ping):
-        monitor = cronitor.Monitor(id=FAKE_ID)
-        monitor.run(**{
+        monitor = Monitor(id=FAKE_ID)
+        params = {
             'message': "test",
             'env': 'staging',
             'duration': 1,
             'host': 'blue-oyster',
             'series': 'a.b.c',
             'count': '42',
-            'error_count': 0})
+            'error_count': 0}
 
-        ping.assert_called_once_with('run', {
-            'message': "test",
-            'env': 'staging',
-            'duration': 1,
-            'host': 'blue-oyster',
-            'series': 'a.b.c',
-            'count': '42',
-            'error_count': 0 })
+        monitor.run(**params)
+        ping.assert_called_once_with('run', params)
 
 
 
