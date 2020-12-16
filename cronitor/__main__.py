@@ -45,6 +45,7 @@ def main():
 
     monitor = Monitor(id=args.id, ping_api_key=args.pingApiKey)
 
+    ret = None
     if args.run:
         ret = monitor.run(message=args.msg)
     elif args.complete:

@@ -1,38 +1,167 @@
+import logging
 import os
 from datetime import datetime
 from functools import wraps
-from random import random
-from .monitor import Monitor, MonitorNotFound, MonitorNotCreated, MonitorNotUpdated, InvalidPingUrl, InvalidMonitorParams
-import logging
+import sys
+import yaml
+
+from .monitor import Monitor
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
 
-def ping(key, id=None, schedule=None, api_key=None):
+CONFIG_KEYS = (
+    'api_key',
+    'api_version',
+    'environment',
+)
+MONITOR_TYPES = ('job', 'event', 'synthetic')
+YAML_KEYS = CONFIG_KEYS + tuple(map(lambda t: '{}s'.format(t), MONITOR_TYPES))
+
+# configuration variables
+api_key = os.getenv('CRONITOR_API_KEY', None)
+api_version = os.getenv('CRONITOR_API_VERSION', None)
+environment = os.getenv('CRONITOR_ENVIRONMENT', None)
+config = os.getenv('CRONITOR_CONFIG', None)
+
+# this is a pointer to the module object instance itself.
+this = sys.modules[__name__]
+if this.config:
+    this.read_config() # set config vars contained within
+
+class MonitorNotFound(Exception):
+    pass
+
+class ConfigValidationError(Exception):
+    pass
+
+class APIValidationError(Exception):
+    pass
+
+class AuthenticationError(Exception):
+    pass
+
+class APIError(Exception):
+    pass
+
+class State(object):
+    OK = 'ok'
+    RUN = 'run'
+    COMPLETE = 'complete'
+    FAIL = 'fail'
+
+
+def job(key):
     def wrapper(func):
         @wraps(func)
         def wrapped(*args, **kwargs):
             start = datetime.now().timestamp()
 
-            try:
-                monitor = Monitor(id, key=key)
-            except Exception:
-                return func(*args, **kwargs)
-
-            # use start as the series param to match run/completes correctly
-            monitor.run(stamp=start, series=start)
+            monitor = Monitor(key)
+            # use start as the series param to match run/fail/complete correctly
+            monitor.ping(state=State.RUN, series=start)
             try:
                 out = func(*args, **kwargs)
             except Exception as e:
-                monitor.fail(message=str(e))
+                duration = datetime.now().timestamp() - start
+                monitor.ping(state=State.FAIL, message=str(e), duration=duration, series=start)
                 raise e
 
-            end = datetime.now().timestamp()
-            duration = end - start
-
-            monitor.complete(stamp=end, duration=duration, series=start)
+            duration = datetime.now().timestamp() - start
+            monitor.ping(state=State.COMPLETE, duration=duration, series=start)
             return out
 
         return wrapped
     return wrapper
 
+
+def generate_config():
+    config = this.config or './cronitor.yaml'
+    try:
+        monitors = Monitor.all(api_key=api_key)
+        jobs = {m.key: m for m in filter(lambda m: m['type'] == 'job', monitors)}
+        events = {m.key: m for m in filter(lambda m: m['type'] == 'event', monitors)}
+        synthetics = {m.key: m for m in filter(lambda m: m['type'] == 'check', monitors)}
+    except (AuthenticationError, APIError) as e:
+        return print(e)
+
+    out = {
+        'api_key': api_key,
+        'api_version': api_version,
+        'environment': environment,
+        'jobs': jobs,
+        'synthetics': synthetics,
+        'events': events,
+
+    }
+    # write them to the config file
+    with open(config, 'w') as conf:
+        yaml.dump(out, conf, sort_keys=False)
+
+def validate_config():
+    return apply_config(rollback=True)
+
+def apply_config(rollback=False):
+    try:
+        conf = _parse_config()
+        monitors = Monitor.put(conf.get('monitors'), rollback=rollback)
+        print("{} valid monitors detected".format(len(monitors)))
+    except ConfigValidationError as e:
+        logger.error(e)
+    except APIValidationError as e:
+        logger.error(e)
+    except APIError as e:
+        logger.error(e)
+    except AuthenticationError as e:
+        logger.error(e)
+
+def read_config(path=None, output=False):
+    this.config = path or this.config
+    if not this.config:
+        raise ConfigValidationError("Must include a path to config file e.g. cronitor.read_config('./cronitor.yaml')")
+
+    with open(this.config, 'r') as conf:
+        data = yaml.load(conf)
+
+        if 'api_key' in data:
+            this.api_key = data['api_key']
+        if 'api_version' in data:
+            this.api_version = data['api_version']
+        if 'environment' in data:
+            this.environment = data['environment']
+        if output:
+            return data
+
+def _parse_config():
+    data = read_config(output=True)
+    out = []
+    for k in data.keys():
+        if k not in YAML_KEYS:
+            raise ConfigValidationError("Invalid configuration variable: %s" % k)
+
+    monitors = data.get('monitors', {})
+    if type(monitors) != dict:
+        raise ConfigValidationError("A dict of monitors with keys corresponding to monitor keys is expected")
+
+    for key, m in monitors.items():
+        m['key'] = key
+        out.append(m)
+
+    for t in MONITOR_TYPES:
+        to_parse = None
+        plural_t = t + 's'
+        if t in data:
+            to_parse = data[t]
+        elif plural_t in data:
+            to_parse = data[plural_t]
+
+        if to_parse:
+            if type(to_parse) != dict:
+                raise ConfigValidationError("A dict of with keys corresponding to monitor keys is expected.")
+            for key, m in to_parse.items():
+                m['key'] = key
+                m['type'] = t
+                out.append(m)
+
+    data['monitors'] = out
+    return data
