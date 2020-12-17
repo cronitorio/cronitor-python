@@ -1,9 +1,7 @@
-# Cronitor Python SDK
+# Cronitor Python Library
 [![Build Status](https://travis-ci.org/cronitorio/cronitor-python.svg?branch=master)](https://travis-ci.org/cronitorio/cronitor-python)
 
-[Cronitor](https://cronitor.io/) is a monitoring cron jobs, pipelines, daemons, or any other system that can make or receive HTTP requests.
-
-This Python library provides convenient access to the Cronitor API from applications written in the Python language. If you are unfamiliar with Cronitor, read our [Cron Monitoring](https://cronitor.io/docs/cron-job-monitoring) or [Heartbeat Monitoring](https://cronitor.io/docs/heartbeat-monitoring) guide to learn more.
+[Cronitor](https://cronitor.io/) provides dead simple monitoring for cron jobs, daemons, data pipelines, queue workers, and anything else that can send or receive an HTTP request. The Cronitor Python library provides convenient access to the Cronitor API from applications written in Python.
 
 ## Documentation
 See our [API docs](https://cronitor.io/docs/api) for a detailed reference information about the APIs this SDK supports for creating monitors and sending telemetry pings.
@@ -14,9 +12,7 @@ See our [API docs](https://cronitor.io/docs/api) for a detailed reference inform
 pip install cronitor
 ```
 
-
 ## Usage
-
 
 The package needs to be configured with your account's `API key`, which is available on the [account settings](https://cronitor.io/settings) page. You can also optionally specify an `Api Version` (default: account default) and `Environment` (default: account default).
 
