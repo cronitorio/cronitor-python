@@ -36,7 +36,7 @@ cronitor.read_config('./path/to/cronitor.yaml')
 
 ### Integrate with Cron/Scheduled Task Libraries
 
-This package provides a lightweight wrapper for integrating with libraries like Celery's [periodic tasks](https://docs.celeryproject.org/en/stable/userguide/periodic-tasks.html) or the popular [schedule](https://github.com/dbader/schedule) package to monitor any job.
+This package provides a lightweight wrapper for integrating with libraries like Celery's [Beat Scheduler](https://docs.celeryproject.org/en/v5.0.5/reference/celery.beat.html) or the popular [schedule](https://github.com/dbader/schedule) package to monitor any job.
 
 #### celery example
 ```python
