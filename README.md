@@ -59,7 +59,7 @@ def every_minute_celery_task():
 
 ```
 
-### schedule example
+#### schedule example
 ```python
 import schedule
 
