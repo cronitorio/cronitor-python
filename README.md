@@ -4,7 +4,7 @@
 [Cronitor](https://cronitor.io/) provides dead simple monitoring for cron jobs, daemons, data pipelines, queue workers, and anything else that can send or receive an HTTP request. The Cronitor Python library provides convenient access to the Cronitor API from applications written in Python.
 
 ## Documentation
-See our [API docs](https://cronitor.io/docs/api) for a detailed reference information about the APIs this SDK supports for creating monitors and sending telemetry pings.
+See our [API docs](https://cronitor.io/docs/api) for a detailed reference information about the APIs this library uses for configuring monitors and sending telemetry pings.
 
 ## Installation
 
