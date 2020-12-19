@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 import cronitor
 
-FAKE_API_KEY = 'apikey1234'
+FAKE_API_KEY = '1234567'
 
 MONITOR = {
     'type': 'job',
@@ -13,7 +13,7 @@ MONITOR = {
     'assertions': [
         'metric.duration < 10 seconds'
     ],
-    'notify': ['devops-alerts']
+    # 'notify': ['devops-alerts']
 }
 MONITOR_2 = copy.deepcopy(MONITOR)
 MONITOR_2['key'] = 'another-test-key'
@@ -35,7 +35,7 @@ class MonitorTests(unittest.TestCase):
         self.assertEqual(len(monitors), 2)
         self.assertCountEqual([MONITOR['key'], MONITOR_2['key']], list(map(lambda m: m.data.key, monitors)))
 
-    @patch('requests.put')
+    @patch('cronitor.Monitor._req.put')
     def test_create_monitor_fails(self, mocked_put):
         mocked_put.return_value.status_code = 400
         with self.assertRaises(cronitor.APIValidationError):
@@ -57,7 +57,7 @@ class MonitorTests(unittest.TestCase):
         monitor = cronitor.Monitor.put(key=MONITOR['key'], name='Updated Name')
         self.assertEqual(monitor.data.name, 'Updated Name')
 
-    @patch('requests.put')
+    @patch('cronitor.Monitor._req.put')
     def test_update_monitor_fails_validation(self, mocked_update):
         mocked_update.return_value.status_code = 400
         with self.assertRaises(cronitor.APIValidationError):

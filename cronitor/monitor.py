@@ -4,10 +4,10 @@ import json
 import os
 import requests
 
-from urllib3.util.retry import Retry
-from requests.adapters import HTTPAdapter
 
 import cronitor
+from urllib3.util.retry import Retry
+from requests.adapters import HTTPAdapter
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
@@ -45,7 +45,7 @@ class Monitor(object):
         total_count = 50
         monitors = []
         while total_count >= (page-1 * page_size):
-            resp = requests.get('{}?page={}'.format(cls._monitor_api_url(), page),
+            resp = cls._req.get('{}?page={}'.format(cls._monitor_api_url(), page),
                         auth=(api_key, ''),
                         headers=cls._headers,
                         timeout=10)
@@ -84,7 +84,7 @@ class Monitor(object):
     def _put(cls, monitors, api_key, rollback):
         payload = _prepare_payload(monitors, rollback)
 
-        resp = requests.put(cls._monitor_api_url(),
+        resp = cls._req.put(cls._monitor_api_url(),
                         auth=(api_key, ''),
                         data=json.dumps(payload),
                         headers=cls._headers,
@@ -141,7 +141,7 @@ class Monitor(object):
         return self._req.get(url=self._ping_api_url(), params=self._clean_params(params), timeout=5, headers=self._headers)
 
     def ok(self):
-        self.ping(state=cronitor.Event.ok)
+        self.ping(state=cronitor.State.ok)
 
     def pause(self, hours):
         return self._req.get(url='{}/pause/{}'.format(self._monitor_api_url(self.key), hours))

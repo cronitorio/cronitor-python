@@ -4,6 +4,7 @@ from datetime import datetime
 from functools import wraps
 import sys
 import yaml
+from yaml.loader import SafeLoader
 
 from .monitor import Monitor
 
@@ -64,11 +65,11 @@ def job(key):
                 out = func(*args, **kwargs)
             except Exception as e:
                 duration = datetime.now().timestamp() - start
-                monitor.ping(state=State.FAIL, message=str(e), duration=duration, series=start)
+                monitor.ping(state=State.FAIL, message=str(e), metrics={'duration': duration}, series=start)
                 raise e
 
             duration = datetime.now().timestamp() - start
-            monitor.ping(state=State.COMPLETE, duration=duration, series=start)
+            monitor.ping(state=State.COMPLETE, metrics={'duration': duration}, series=start)
             return out
 
         return wrapped
@@ -81,7 +82,7 @@ def generate_config():
         monitors = Monitor.all(api_key=api_key)
         jobs = {m.key: m for m in filter(lambda m: m['type'] == 'job', monitors)}
         events = {m.key: m for m in filter(lambda m: m['type'] == 'event', monitors)}
-        synthetics = {m.key: m for m in filter(lambda m: m['type'] == 'check', monitors)}
+        synthetics = {m.key: m for m in filter(lambda m: m['type'] == 'synthetic', monitors)}
     except (AuthenticationError, APIError) as e:
         return print(e)
 
@@ -105,14 +106,8 @@ def apply_config(rollback=False):
     try:
         conf = _parse_config()
         monitors = Monitor.put(conf.get('monitors'), rollback=rollback)
-        print("{} valid monitors detected".format(len(monitors)))
-    except ConfigValidationError as e:
-        logger.error(e)
-    except APIValidationError as e:
-        logger.error(e)
-    except APIError as e:
-        logger.error(e)
-    except AuthenticationError as e:
+        print("{} monitors {}".format(len(monitors), 'validated.' if rollback else 'synced to Cronitor.'))
+    except (ConfigValidationError, APIValidationError, APIError, AuthenticationError) as e:
         logger.error(e)
 
 def read_config(path=None, output=False):
@@ -121,7 +116,7 @@ def read_config(path=None, output=False):
         raise ConfigValidationError("Must include a path to config file e.g. cronitor.read_config('./cronitor.yaml')")
 
     with open(this.config, 'r') as conf:
-        data = yaml.load(conf)
+        data = yaml.load(conf, Loader=SafeLoader)
 
         if 'api_key' in data:
             this.api_key = data['api_key']
@@ -134,18 +129,10 @@ def read_config(path=None, output=False):
 
 def _parse_config():
     data = read_config(output=True)
-    out = []
+    monitors = []
     for k in data.keys():
         if k not in YAML_KEYS:
             raise ConfigValidationError("Invalid configuration variable: %s" % k)
-
-    monitors = data.get('monitors', {})
-    if type(monitors) != dict:
-        raise ConfigValidationError("A dict of monitors with keys corresponding to monitor keys is expected")
-
-    for key, m in monitors.items():
-        m['key'] = key
-        out.append(m)
 
     for t in MONITOR_TYPES:
         to_parse = None
@@ -161,7 +148,7 @@ def _parse_config():
             for key, m in to_parse.items():
                 m['key'] = key
                 m['type'] = t
-                out.append(m)
+                monitors.append(m)
 
-    data['monitors'] = out
+    data['monitors'] = monitors
     return data

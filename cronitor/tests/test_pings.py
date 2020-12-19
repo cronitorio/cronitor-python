@@ -1,5 +1,7 @@
+import os
 import unittest
 from unittest.mock import patch, ANY, call
+from unittest.mock import MagicMock
 
 import cronitor
 
@@ -69,14 +71,14 @@ class PingDecoratorTests(unittest.TestCase):
 
     @patch('cronitor.Monitor.ping')
     def test_ping_wraps_function_success(self, mocked_ping):
-        calls = [call(state='run', series=ANY), call(state='complete', series=ANY, duration=ANY)]
+        calls = [call(state='run', series=ANY), call(state='complete', series=ANY, metrics={'duration': ANY})]
         self.function_call()
         mocked_ping.assert_has_calls(calls)
 
 
     @patch('cronitor.Monitor.ping')
     def test_ping_wraps_function_raises_exception(self, mocked_ping):
-        calls = [call(state='run', series=ANY), call(state='fail', series=ANY, duration=ANY, message=ANY)]
+        calls = [call(state='run', series=ANY), call(state='fail', series=ANY, metrics={'duration': ANY}, message=ANY)]
         self.assertRaises(Exception, lambda: self.error_function_call())
         mocked_ping.assert_has_calls(calls)
 
