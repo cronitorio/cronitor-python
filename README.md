@@ -1,10 +1,10 @@
-# Cronitor API Client
+# Cronitor Python Library
 [![Build Status](https://travis-ci.org/cronitorio/cronitor-python.svg?branch=master)](https://travis-ci.org/cronitorio/cronitor-python)
 
-[Cronitor](https://cronitor.io/) is a monitoring cron jobs, pipelines, daemons, or any other system that can make or receive HTTP requests.
+[Cronitor](https://cronitor.io/) provides dead simple monitoring for cron jobs, daemons, data pipelines, queue workers, and anything else that can send or receive an HTTP request. The Cronitor Python library provides convenient access to the Cronitor API from applications written in Python.
 
-This Python library provides convenient access to the Cronitor API from applications written in the Python language. If you are unfamiliar with Cronitor, read our [Cron Monitoring](https://cronitor.io/docs/cron-job-monitoring) or [Heartbeat Monitoring](https://cronitor.io/docs/heartbeat-monitoring) guide to learn more.
-
+## Documentation
+See our [API docs](https://cronitor.io/docs/api) for a detailed reference information about the APIs this library uses for configuring monitors and sending telemetry pings.
 
 ## Installation
 
@@ -12,131 +12,213 @@ This Python library provides convenient access to the Cronitor API from applicat
 pip install cronitor
 ```
 
+## Usage
 
-## Module Usage
+The package needs to be configured with your account's `API key`, which is available on the [account settings](https://cronitor.io/settings) page. You can also optionally specify an `Api Version` (default: account default) and `Environment` (default: account default).
 
-### Monitor Any Python Function
-
-The ping decorator will automatically provision a monitor with the provided name the first time it is run. It wraps the given function with `run` and `complete` calls on start and finish, and pings `fail` if an exception is thrown.
-
-```python
-from cronitor import ping
-
-@ping("A Python Script")
-def main():
-  print("running...")
-```
-`Nota Bene`: The example above assumes a `CRONITOR_API_KEY` environment variable is present. You can also pass your API key as param to the ping decorator `api_key='cronitor-api-key'`. More on authentication below.
-
-By default you will be alerted whenever an unhandled exception is raised, and you can attach additional rules to your monitors from the Cronitor dashboard.
-
-
-A monitor object can also be imported and has methods that map to the endpoints of the [Ping API](https://cronitor.io/docs/ping-api).
+These can be supplied using the environment variables `CRONITOR_API_KEY`, `CRONITOR_API_VERSION`, `CRONITOR_ENVIRONMENT` or set directly on the cronitor object.
 
 ```python
-from cronitor import Monitor
+import cronitor
 
-monitor = Monitor('d3x01') # Monitor ID (aka code)
-monitor.run() # job has started
-monitor.complete() # job has finished
-monitor.fail() # job has failed/failure event
-monitor.tick() # event has occurred
-monitor.ok() # manual reset to passing state
+cronitor.api_key = 'apiKey123
+cronitor.api_version = '2020-10-01'
+cronitor.environment = 'staging'
 ```
 
-All ping methods accept the following optional keyword arguments:
+You can also use a YAML config file to manage all of your monitors (_see Create and Update Monitors section below_). The path to this file can be supplied using the enviroment variable `CRONITOR_CONFIG` or call `cronitor.read_config()`.
 
-- `message`: A message you would like associated with this ping event. This is displayed in the Cronitor UI as well as on alerts.
-- `stamp`: A timestamp associated with the ping. When not present Cronitor creates the stamp at the time of system ingress.
-- `duration`: Ignored on all pings except `complete`. Your own custom duration calculation. By default will construct one using `run` and `complete` timestamps.
-- `series`: A unique identifier for a pair of run and complete pings. This is useful if your monitor is running on a distributed system and there are many instances pinging simultaneously as it allows cronitor to correctly match the pings.
-- `env`: The environment this monitor is running in. Default value is `production`
-- `host`: The server host name that this program is running on.
-- `ping_api_key`: If you have enabled ping authentication for your account you can pass the api key on each call, or, better, instantiate the monitor object with one `Monitor(id='d3x01', ping_api_key='1234567890'). Even better, set `CRONITOR_PING_API_KEY` as an environment variable.
-
-
-### Monitor CRUD
-
-You can also perform all of the standard CRUD operations on a monitor. You will need a [monitor API key](https://cronitor.io/settings#integrations). The following map to the REST endpoints of the [Monitor API](http://cronitor.test/docs/monitor-api).
-
-```python
-from cronitor import Monitor
-
-# In order to authenticate to cronitor you can set an ENV var
-# CRONITOR_API_KEY='cronitor-api-key'
-#
-# or set your api_key as an attribute of the Monitor class
-Monitor.api_key = 'cronitor-api-key'
-#
-# or pass it as a keyword param to get, create, update, or delete
-Monitor.get('My Cron Monitor', api_key='cronitor-api-key')
-
-# monitor look up
-monitor = Monitor.get('My Cron Monitor') # by name
-monitor = Monitor.get('d3x01') # by monitorId
-
-# create monitor with the provided schedule if no monitor is found matching the name
-monitor = Monitor.get_or_create("Daily Cron Job", schedule="0 0 * * *")
-
-# create a monitor
-monitor = Monitor.create(name="Daily Cron Job", schedule="0 0 * * *")
-
-# access data attributes
-print(monitor.data.name) # "Daily Cron Job"
-print(monitor.data.status) # "Waiting for first ping"
-
-# update a monitor
-monitor.update(name="Sunday At Midnight Cron", schedule="0 0 * * SUN")
-
-# delete a monitor
-monitor.delete()
+```javascript
+import cronitor
+cronitor.read_config('./path/to/cronitor.yaml')
 ```
 
-Monitors can be created and updated with following optional keyword arguments
 
-- `schedule: str`: A convenient way to add a `not_on_schedule` rule (cron expression) to your monitor
-- `rules: List[Dict]`: Rules to set beyond default 'failure' rule. e.g `[{'rule_type': 'ran_longer_than', 'value': 2, 'time_unit': 'hours'}]
-- `notifications: Dict`: Where to send alerts. See examples below for list of options
-- `tags: List`: A way to group similar monitors together. Use as desired
-- `note: str`: A note displayed on the Cronitor UI and on alerts in the case of failure.
-- `timezone: str`: The timezone this program is running in. Defaults to account setting, which defaults to `UTC`
+### Integrate with Cron/Scheduled Task Libraries
 
+This package provides a lightweight wrapper for integrating with libraries like Celery's [Beat Scheduler](https://docs.celeryproject.org/en/v5.0.5/reference/celery.beat.html) or the popular [schedule](https://github.com/dbader/schedule) package to monitor any job.
+
+#### celery example
 ```python
+import cronitor
+from celery import Celery
 
-notifications =  {
-    'emails': ['test@example.com'],
-    'phones': ['+15555555555],
-    'slack': [ 'slack-identifier'], # found https://cronitor.io/settings#integrations
-    'pagerduty': ['pd-identifier'],
-    'victorops': ['vc-identifier']
-    'teams': ['teams-identifier']
-    'webhooks': ['https://example.com/webhooks/incoming']
+app = Celery()
+
+app.conf.beat_schedule = {
+  'run-me-every-minute': {
+    'task': 'tasks.every_minute_celery_task',
+    'schedule': 60
   }
+}
 
-rules = [
-    {
-      "rule_type": 'not_run_in',
-      "duration": 5,
-      "time_unit": 'minutes'
+@app.task
+@cronitor.job("run-me-every-minute")
+def every_minute_celery_task():
+    print("running a background job with celery...")
+
+```
+
+#### schedule example
+```python
+import schedule
+
+@cronitor.job("hourly-schedule-job")
+def job():
+  print("running a background job...")
+
+schedule.every().hour.do(job)
+```
+
+The `@cronitor.job` decorator will send telemetry pings when your function begins and exits. If an error is raised a `fail` ping will be sent. Monitors will be automatically provisioned with the provided key the first time a ping is received.
+
+
+### Sending Telemetry Pings
+
+If you simply want to send a heartbeat event or want finer control over when/how [telemetry pings](https://cronitor.io/docs/ping-api) are sent,
+you can create a monitor instance and call `.ping` directly.
+
+```python
+import cronitor
+
+# if authenticated pings are enabled, add your apiKey when creating a Ping object
+monitor = cronitor.Monitor('heartbeat-monitor');
+monitor.ping()
+
+# optional params can be passed as an object.
+# for a complete list see https://cronitor.io/docs/ping-api
+monitor.ping({
+    state: 'run|complete|fail|ok', # run|complete|fail used to measure lifecycle of a job, ok used for manual reset only.
+    env: '', # the environment this is running in (e.g. staging, production)
+    message: '', # message that will be displayed in alerts as well as monitor activity panel on your dashboard.
+    metrics: {
+        duration: 100, # how long the job ran (complete|fail only). cronitor will calculate this when not provided
+        count: 4500, # if your job is processing a number of items you can report a count
+        error_count: 10 # the number of errors that occurred while this job was running
     }
-  ]
+});
+```
 
-tags = ['cron-jobs']
+### Pause, Reset, Delete
 
-# Note: String
-note = 'A human-friendly description of this monitor'
+```python
+import cronitor
 
+monitor = cronitor.Monitor('heartbeat-monitor');
+
+monitor.pause(24) # pause alerting for 24 hours
+monitor.unpause() # alias for .pause(0)
+monitor.ok() # manually reset to a passing state alias for monitor.ping({state: ok})
+monitor.delete() # destroy the monitor
+```
+
+## Create and Update Monitors
+
+You can create monitors programatically using the `Monitor` object.
+For details on all of the attributes that can be set see the [Monitor API](https://cronitor.io/docs/monitor-api) documentation.
+
+
+```python
+import cronitor
+
+monitors = cronitor.Monitor.put(
+  {
+    'type': 'job',
+    'key': 'send-customer-invoices',
+    'schedule': '0 0 * * *',
+    'assertions': [
+        'metric.duration < 5 min'
+    ],
+    'notify': ['devops-alerts-slack']
+  },
+  {
+    'type': 'synthetic',
+    'key': 'Orders Api Uptime',
+    'schedule': 'every 45 seconds',
+    'assertions': [
+        'response.code = 200',
+        'response.time < 1.5s',
+        'response.json "open_orders" < 2000'
+    ]
+  }
+)
+```
+
+You can also manage all of your monitors via a YAML config file.
+This can be version controlled and synced to Cronitor as part of
+a deployment pipeline or system update.
+
+```python
+import cronitor
+
+cronitor.read_config('./cronitor.yaml'); # parse the yaml file of monitors
+
+cronitor.validate_config(); # send monitors to Cronitor for configuration validation
+
+cronitor.apply_config(); # sync the monitors from the config file to Cronitor
 ```
 
 
-## Console Usage
+The `cronitor.yaml` file accepts the following attributes:
+
+```yaml
+api_key: 'optionally read Cronitor api_key from here'
+api_version: 'optionally read Cronitor api_version from here'
+environment: 'optionally set an environment for telemetry pings'
+
+# configure all of your monitors with type "job"
+# you may omit the type attribute and the key
+# of each object will be set as the monitor key
+jobs:
+    nightly-database-backup:
+        schedule: 0 0 * * *
+        notify:
+            - devops-alert-pagerduty
+        assertions:
+            - metric.duration < 5 minutes
+
+    send-welcome-email:
+        schedule: every 10 minutes
+        assertions:
+            - metric.count > 0
+            - metric.duration < 30 seconds
+
+# configure all of your monitors with type "synthetic"
+synthetics:
+    cronitor-homepage:
+        request:
+            url: https://cronitor.io
+            regions:
+                - us-east-1
+                - eu-central-1
+                - ap-northeast-1
+        assertions:
+            - response.code = 200
+            - response.time < 2s
+
+    cronitor-ping-api:
+        request:
+            url: https://cronitor.link/ping
+        assertions:
+            - response.body contains ok
+            - response.time < .25s
+
+events:
+    production-deploy:
+        notify:
+            alerts: ['deploys-slack']
+            events: true # send alert when the event occurs
 
 ```
 
->> cronitor -h
+## Command Line Usage
 
-usage: cronitor [-h] [--authkey AUTHKEY] [--code CODE] [--msg MSG]
-                (--run | --complete | --fail | --pause PAUSE)
+
+```bash
+>> python -m cronitor -h
+
+usage: cronitor [-h] [--apikey APIKEY] [--key KEY] [--msg MSG]
+                (--run | --complete | --fail | --ok | --pause PAUSE)
 
 Send status messages to Cronitor ping API.
 
@@ -144,20 +226,38 @@ optional arguments:
   -h, --help            show this help message and exit
   --authkey AUTHKEY, -a AUTHKEY
                         Auth Key from Account page
-  --code CODE, -c CODE  Code for Monitor to take action upon
+  --key KEY, -k KEY     Unique key for the monitor to take ping
   --msg MSG, -m MSG     Optional message to send with ping/fail
-  --run, -r             Call ping on given Code
-  --complete, -C        Call complete on given Code
-  --fail, -f            Call fail on given Code
+  --tick, -t            Call ping on given monitor
+  --run, -r             Call ping with state=run on given monitor
+  --complete, -C        Call ping with state=complete on given monitor
+  --fail, -f            Call ping with state=fail on given monitor
   --pause PAUSE, -P PAUSE
-                        Call pause on given Code
+                        Call pause on given monitor
 ```
 
 
 ## Contributing
 
-1. Fork it ( https://github.com/cronitorio/cronitor/fork )
-2. Create your feature branch (`git checkout -b my-new-feature`)
-3. Commit your changes (`git commit -am 'Add some feature'`)
-4. Push to the branch (`git push origin my-new-feature`)
-5. Create a new Pull Request
+Pull requests and features are happily considered! By participating in this project you agree to abide by the [Code of Conduct](http://contributor-covenant.org/version/2/0).
+
+### To contribute
+
+Fork, then clone the repo:
+
+    git clone git@github.com:your-username/cronitor-python.git
+
+Set up your machine:
+
+    pip install -r requirements
+
+Make sure the tests pass:
+
+    pytest
+
+Make your change. Add tests for your change. Make the tests pass:
+
+    pytest
+
+
+Push to your fork and [submit a pull request]( https://github.com/cronitorio/cronitor-python/compare/)
