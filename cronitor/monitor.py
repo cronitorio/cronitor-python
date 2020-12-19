@@ -137,8 +137,12 @@ class Monitor(object):
         if not self.api_key:
             logger.error('No API key detected. Set cronitor.api_key or initialize Monitor with kwarg.')
             return
-
-        return self._req.get(url=self._ping_api_url(), params=self._clean_params(params), timeout=5, headers=self._headers)
+        try:
+            self._req.get(url=self._ping_api_url(), params=self._clean_params(params), timeout=5, headers=self._headers)
+            return True
+        except Exception:
+            logger.error('Failed to ping Cronitor with key - %s' % self.key)
+            return False
 
     def ok(self):
         self.ping(state=cronitor.State.ok)
