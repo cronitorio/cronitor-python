@@ -81,7 +81,6 @@ you can create a monitor instance and call `.ping` directly.
 ```python
 import cronitor
 
-# if authenticated pings are enabled, add your apiKey when creating a Ping object
 monitor = cronitor.Monitor('heartbeat-monitor');
 monitor.ping()
 
