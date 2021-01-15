@@ -114,7 +114,7 @@ monitor.delete() # destroy the monitor
 ## Create and Update Monitors
 
 You can create monitors programatically using the `Monitor` object.
-For details on all of the attributes that can be set see the [Monitor API](https://cronitor.io/docs/monitor-api) documentation.
+For details on all of the attributes that can be set, see the [Monitor API](https://cronitor.io/docs/monitor-api) documentation.
 
 
 ```python
