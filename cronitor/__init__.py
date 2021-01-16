@@ -144,7 +144,7 @@ def _parse_config():
 
         if to_parse:
             if type(to_parse) != dict:
-                raise ConfigValidationError("A dict of with keys corresponding to monitor keys is expected.")
+                raise ConfigValidationError("A dict with keys corresponding to monitor keys is expected.")
             for key, m in to_parse.items():
                 m['key'] = key
                 m['type'] = t
