@@ -18,6 +18,7 @@ CONFIG_KEYS = (
 )
 MONITOR_TYPES = ('job', 'event', 'synthetic')
 YAML_KEYS = CONFIG_KEYS + tuple(map(lambda t: '{}s'.format(t), MONITOR_TYPES))
+READONLY_KEYS = ('key', 'status', 'initialized', 'running', 'disabled', 'passing', 'paused', 'created')
 
 # configuration variables
 api_key = os.getenv('CRONITOR_API_KEY', None)
@@ -80,9 +81,10 @@ def generate_config():
     config = this.config or './cronitor.yaml'
     try:
         monitors = Monitor.all(api_key=api_key)
-        jobs = {m.key: m for m in filter(lambda m: m['type'] == 'job', monitors)}
-        events = {m.key: m for m in filter(lambda m: m['type'] == 'event', monitors)}
-        synthetics = {m.key: m for m in filter(lambda m: m['type'] == 'synthetic', monitors)}
+        sparse = list(map(lambda x: {k: v for k, v in x.items() if k not in READONLY_KEYS and v is not None}, monitors))
+        jobs = {m['key']: m for m in filter(lambda m: m['type'] == 'job', sparse)}
+        events = {m['key']: m for m in filter(lambda m: m['type'] == 'event', sparse)}
+        synthetics = {m['key']: m for m in filter(lambda m: m['type'] == 'synthetic', sparse)}
     except (AuthenticationError, APIError) as e:
         return print(e)
 
@@ -97,7 +99,7 @@ def generate_config():
     }
     # write them to the config file
     with open(config, 'w') as conf:
-        yaml.dump(out, conf, sort_keys=False)
+        yaml.dump(out, conf, sort_keys=True)
 
 def validate_config():
     return apply_config(rollback=True)

@@ -44,7 +44,7 @@ class Monitor(object):
         page_size = 50
         total_count = 50
         monitors = []
-        while total_count >= (page-1 * page_size):
+        while total_count >= ((page-1) * page_size):
             resp = cls._req.get('{}?page={}'.format(cls._monitor_api_url(), page),
                         auth=(api_key, ''),
                         headers=cls._headers,
