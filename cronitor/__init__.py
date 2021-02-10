@@ -18,7 +18,7 @@ CONFIG_KEYS = (
 )
 MONITOR_TYPES = ('job', 'event', 'synthetic')
 YAML_KEYS = CONFIG_KEYS + tuple(map(lambda t: '{}s'.format(t), MONITOR_TYPES))
-READONLY_KEYS = ('key', 'status', 'initialized', 'running', 'disabled', 'passing', 'paused', 'created')
+READONLY_KEYS = ('status', 'initialized', 'running', 'disabled', 'passing', 'paused', 'created')
 
 # configuration variables
 api_key = os.getenv('CRONITOR_API_KEY', None)
