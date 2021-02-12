@@ -37,25 +37,16 @@ class Monitor(object):
     _req = retry_session(retries=3)
 
     @classmethod
-    def all(cls, api_key=None):
+    def as_yaml(cls, api_key=None):
         api_key = api_key or cronitor.api_key
-
-        page = 1
-        page_size = 50
-        total_count = 50
-        monitors = []
-        while total_count >= ((page-1) * page_size):
-            resp = cls._req.get('{}?page={}'.format(cls._monitor_api_url(), page),
+        resp = cls._req.get('%s.yaml' % cls._monitor_api_url(),
                         auth=(api_key, ''),
                         headers=cls._headers,
                         timeout=10)
-            if resp.ok:
-                data = resp.json()
-                monitors += data.get('monitors', [])
-                total_count = data.get('total_monitor_count', total_count)
-                page += 1
-
-        return monitors
+        if resp.status_code == 200:
+            return resp.text
+        else:
+            raise cronitor.APIError("Unexpected error %s" % resp.text)
 
     @classmethod
     def put(cls, monitors=None, **kwargs):
