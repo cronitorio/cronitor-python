@@ -81,21 +81,21 @@ you can create a monitor instance and call `.ping` directly.
 ```python
 import cronitor
 
-monitor = cronitor.Monitor('heartbeat-monitor');
+monitor = cronitor.Monitor('heartbeat-monitor')
 monitor.ping()
 
 # optional params can be passed as an object.
 # for a complete list see https://cronitor.io/docs/ping-api
-monitor.ping({
-    state: 'run|complete|fail|ok', # run|complete|fail used to measure lifecycle of a job, ok used for manual reset only.
-    env: '', # the environment this is running in (e.g. staging, production)
-    message: '', # message that will be displayed in alerts as well as monitor activity panel on your dashboard.
-    metrics: {
-        duration: 100, # how long the job ran (complete|fail only). cronitor will calculate this when not provided
-        count: 4500, # if your job is processing a number of items you can report a count
-        error_count: 10 # the number of errors that occurred while this job was running
+monitor.ping(**{
+    'state': 'run|complete|fail|ok', # run|complete|fail used to measure lifecycle of a job, ok used for manual reset only.
+    'env': '', # the environment this is running in (e.g. staging, production)
+    'message': '', # message that will be displayed in alerts as well as monitor activity panel on your dashboard.
+    'metrics': {
+        'duration': 100, # how long the job ran (complete|fail only). cronitor will calculate this when not provided
+        'count': 4500, # if your job is processing a number of items you can report a count
+        'error_count': 10 # the number of errors that occurred while this job was running
     }
-});
+})
 ```
 
 ### Pause, Reset, Delete
@@ -103,11 +103,11 @@ monitor.ping({
 ```python
 import cronitor
 
-monitor = cronitor.Monitor('heartbeat-monitor');
+monitor = cronitor.Monitor('heartbeat-monitor')
 
 monitor.pause(24) # pause alerting for 24 hours
 monitor.unpause() # alias for .pause(0)
-monitor.ok() # manually reset to a passing state alias for monitor.ping({state: ok})
+monitor.ok() # manually reset to a passing state alias for monitor.ping(state='ok')
 monitor.delete() # destroy the monitor
 ```
 
@@ -120,7 +120,7 @@ For details on all of the attributes that can be set, see the [Monitor API](http
 ```python
 import cronitor
 
-monitors = cronitor.Monitor.put(
+monitors = cronitor.Monitor.put([
   {
     'type': 'job',
     'key': 'send-customer-invoices',
@@ -140,7 +140,7 @@ monitors = cronitor.Monitor.put(
         'response.json "open_orders" < 2000'
     ]
   }
-)
+])
 ```
 
 You can also manage all of your monitors via a YAML config file.
@@ -150,11 +150,13 @@ a deployment or build process.
 ```python
 import cronitor
 
-cronitor.read_config('./cronitor.yaml'); # parse the yaml file of monitors
+cronitor.generate_config() # generate a (sparse) YAML file representing all of your monitors' configuration
 
-cronitor.validate_config(); # send monitors to Cronitor for configuration validation
+cronitor.read_config('./cronitor.yaml') # parse the yaml file of monitors
 
-cronitor.apply_config(); # sync the monitors from the config file to Cronitor
+cronitor.validate_config() # send monitors to Cronitor for configuration validation
+
+cronitor.apply_config() # sync the monitors from the config file to Cronitor
 ```
 
 
