@@ -3,8 +3,16 @@
 
 [Cronitor](https://cronitor.io/) provides dead simple monitoring for cron jobs, daemons, data pipelines, queue workers, and anything else that can send or receive an HTTP request. The Cronitor Python library provides convenient access to the Cronitor API from applications written in Python.
 
-## Documentation
-See our [API docs](https://cronitor.io/docs/api) for a detailed reference information about the APIs this library uses for configuring monitors and sending telemetry pings.
+See our [API docs](https://cronitor.io/docs/api) for details about the APIs this library uses for configuring monitors and sending telemetry pings.
+
+In this guide:
+
+- [Installation](##Installation)
+- [Monitoring Background Jobs](##monitoring-background-jobs)
+- [Sending Telemetry Events](##sending-telemetry-events)
+- [Creating and Updating Monitors](##creating-and-updating-monitors)
+- [Package Configuration](##package-configuration)
+- [Command Line Usage](##command-line-usage)
 
 ## Installation
 
@@ -12,31 +20,25 @@ See our [API docs](https://cronitor.io/docs/api) for a detailed reference inform
 pip install cronitor
 ```
 
-## Usage
+## Monitoring Background Jobs
 
-The package needs to be configured with your account's `API key`, which is available on the [account settings](https://cronitor.io/settings) page. You can also optionally specify an `Api Version` (default: account default) and `Environment` (default: account default).
-
-These can be supplied using the environment variables `CRONITOR_API_KEY`, `CRONITOR_API_VERSION`, `CRONITOR_ENVIRONMENT` or set directly on the cronitor object.
+The `@cronitor.job` decorator will send telemetry event before calling your function and after it exits. If an error is raised a `fail` event will be sent. A monitor with default settings will be automatically provisioned the first time a event is received.
 
 ```python
 import cronitor
 
-cronitor.api_key = 'apiKey123
-cronitor.api_version = '2020-10-01'
-cronitor.environment = 'staging'
+# your api keys can found here - https://cronitor.io/settings
+cronitor.api_key = 'apiKey123'
+
+# apply the cronitor decorator to monitor any function
+@cronitor.job('send-invoices')
+def send_invoices_task(*args, **kwargs):
+    ...
 ```
-
-You can also use a YAML config file to manage all of your monitors (_see Create and Update Monitors section below_). The path to this file can be supplied using the enviroment variable `CRONITOR_CONFIG` or call `cronitor.read_config()`.
-
-```python
-import cronitor
-cronitor.read_config('./path/to/cronitor.yaml')
-```
-
 
 ### Integrate with Cron/Scheduled Task Libraries
 
-This package provides a lightweight wrapper for integrating with libraries like Celery's [Beat Scheduler](https://docs.celeryproject.org/en/v5.0.5/reference/celery.beat.html) or the popular [schedule](https://github.com/dbader/schedule) package to monitor any job.
+The `@cronitor.job` is a lightweight way to monitor background tasks run with libraries like Celery's [Beat Scheduler](https://docs.celeryproject.org/en/v5.0.5/reference/celery.beat.html) or the popular [schedule](https://github.com/dbader/schedule) package.
 
 #### celery example
 ```python
@@ -70,13 +72,10 @@ def job():
 schedule.every().hour.do(job)
 ```
 
-The `@cronitor.job` decorator will send telemetry pings when your function begins and exits. If an error is raised a `fail` ping will be sent. Monitors will be automatically provisioned with the provided key the first time a ping is received.
 
+## Sending Telemetry Events
 
-### Sending Telemetry Pings
-
-If you simply want to send a heartbeat event or want finer control over when/how [telemetry pings](https://cronitor.io/docs/ping-api) are sent,
-you can create a monitor instance and call `.ping` directly.
+If you want to send a heartbeat event, or want finer control over when/how [telemetry events](https://cronitor.io/docs/telemetry-api) are sent for your jobs, you can create a monitor instance and call the `.ping` method.
 
 ```python
 import cronitor
@@ -84,73 +83,30 @@ import cronitor
 monitor = cronitor.Monitor('heartbeat-monitor')
 monitor.ping()
 
-# optional params can be passed as an object.
-# for a complete list see https://cronitor.io/docs/ping-api
-monitor.ping(**{
-    'state': 'run|complete|fail|ok', # run|complete|fail used to measure lifecycle of a job, ok used for manual reset only.
-    'env': '', # the environment this is running in (e.g. staging, production)
-    'message': '', # message that will be displayed in alerts as well as monitor activity panel on your dashboard.
-    'metrics': {
+# optional params can be passed as keyword arguements.
+# for a complete list see https://cronitor.io/docs/telemetry-api#parameters
+monitor.ping(
+    state='run|complete|fail|ok', # run|complete|fail used to measure lifecycle of a job, ok used for manual reset only.
+    env='', # the environment this is running in (e.g. staging, production)
+    message='', # message that will be displayed in alerts as well as monitor activity panel on your dashboard.
+    metrics={
         'duration': 100, # how long the job ran (complete|fail only). cronitor will calculate this when not provided
         'count': 4500, # if your job is processing a number of items you can report a count
         'error_count': 10 # the number of errors that occurred while this job was running
     }
-})
+)
 ```
 
-### Pause, Reset, Delete
+## Creating and Updating Monitors
 
-```python
-import cronitor
-
-monitor = cronitor.Monitor('heartbeat-monitor')
-
-monitor.pause(24) # pause alerting for 24 hours
-monitor.unpause() # alias for .pause(0)
-monitor.ok() # manually reset to a passing state alias for monitor.ping(state='ok')
-monitor.delete() # destroy the monitor
-```
-
-## Create and Update Monitors
-
-You can create monitors programatically using the `Monitor` object.
-For details on all of the attributes that can be set, see the [Monitor API](https://cronitor.io/docs/monitor-api) documentation.
+You can configure all of your monitors using a single YAML configuration file. This can be version controlled and synced to Cronitor as part of
+a deployment or build process. For details on all of the attributes that can be set, see the [Monitor API](https://cronitor.io/docs/monitor-api) documentation.
 
 
 ```python
 import cronitor
 
-monitors = cronitor.Monitor.put([
-  {
-    'type': 'job',
-    'key': 'send-customer-invoices',
-    'schedule': '0 0 * * *',
-    'assertions': [
-        'metric.duration < 5 min'
-    ],
-    'notify': ['devops-alerts-slack']
-  },
-  {
-    'type': 'synthetic',
-    'key': 'Orders Api Uptime',
-    'schedule': 'every 45 seconds',
-    'assertions': [
-        'response.code = 200',
-        'response.time < 1.5s',
-        'response.json "open_orders" < 2000'
-    ]
-  }
-])
-```
-
-You can also manage all of your monitors via a YAML config file.
-This can be version controlled and synced to Cronitor as part of
-a deployment or build process.
-
-```python
-import cronitor
-
-cronitor.generate_config() # generate a (sparse) YAML file representing all of your monitors' configuration
+cronitor.read_config('./cronitor.yaml'); # parse the yaml file of monitors
 
 cronitor.read_config('./cronitor.yaml') # parse the yaml file of monitors
 
@@ -211,6 +167,54 @@ events:
             events: true # send alert when the event occurs
 
 ```
+
+You can also create and update monitors by calling `Monitor.put`.
+
+```python
+import cronitor
+
+monitors = cronitor.Monitor.put(
+  {
+    'type': 'job',
+    'key': 'send-customer-invoices',
+    'schedule': '0 0 * * *',
+    'assertions': [
+        'metric.duration < 5 min'
+    ],
+    'notify': ['devops-alerts-slack']
+  },
+  {
+    'type': 'synthetic',
+    'key': 'Orders Api Uptime',
+    'schedule': 'every 45 seconds',
+    'assertions': [
+        'response.code = 200',
+        'response.time < 1.5s',
+        'response.json "open_orders" < 2000'
+    ]
+  }
+)
+```
+
+### Pausing, Reseting, and Deleting
+
+```python
+import cronitor
+
+monitor = cronitor.Monitor('heartbeat-monitor');
+
+monitor.pause(24) # pause alerting for 24 hours
+monitor.unpause() # alias for .pause(0)
+monitor.ok() # manually reset to a passing state alias for monitor.ping({state: ok})
+monitor.delete() # destroy the monitor
+```
+
+## Package Configuration
+
+The package needs to be configured with your account's `API key`, which is available on the [account settings](https://cronitor.io/settings) page. You can also optionally specify an `Api Version` (default: account default) and `Environment` (default: account default).
+
+These can be supplied using the environment variables `CRONITOR_API_KEY`, `CRONITOR_API_VERSION`, `CRONITOR_ENVIRONMENT` or set directly on the cronitor object.
+
 
 ## Command Line Usage
 
