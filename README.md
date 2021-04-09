@@ -8,7 +8,7 @@ In this guide:
 - [Installation](##Installation)
 - [Monitoring Background Jobs](##monitoring-background-jobs)
 - [Sending Telemetry Events](##sending-telemetry-events)
-- [Creating and Updating Monitors](##creating-and-updating-monitors)
+- [Configuring Monitors](##configuring-monitors)
 - [Package Configuration & Env Vars](##package-configuration)
 - [Command Line Usage](##command-line-usage)
 
@@ -97,7 +97,7 @@ monitor.ping(
 )
 ```
 
-## Creating and Updating Monitors
+## Configuring Monitors
 
 You can configure all of your monitors using a single YAML file. This can be version controlled and synced to Cronitor as part of
 a deployment or build process. For details on all of the attributes that can be set, see the [Monitor API](https://cronitor.io/docs/monitor-api) documentation.
