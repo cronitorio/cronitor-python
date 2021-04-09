@@ -1,9 +1,7 @@
 # Cronitor Python Library
 [![Build Status](https://travis-ci.org/cronitorio/cronitor-python.svg?branch=master)](https://travis-ci.org/cronitorio/cronitor-python)
 
-[Cronitor](https://cronitor.io/) provides dead simple monitoring for cron jobs, daemons, data pipelines, queue workers, and anything else that can send or receive an HTTP request. The Cronitor Python library provides convenient access to the Cronitor API from applications written in Python.
-
-See our [API docs](https://cronitor.io/docs/api) for details about the APIs this library uses for configuring monitors and sending telemetry pings.
+[Cronitor](https://cronitor.io/) provides dead simple monitoring for cron jobs, daemons, data pipelines, queue workers, and anything else that can send or receive an HTTP request. The Cronitor Python library provides convenient access to the Cronitor API from applications written in Python. See our [API docs](https://cronitor.io/docs/api) for detailed references on configuring monitors and sending telemetry pings.
 
 In this guide:
 
@@ -11,7 +9,7 @@ In this guide:
 - [Monitoring Background Jobs](##monitoring-background-jobs)
 - [Sending Telemetry Events](##sending-telemetry-events)
 - [Creating and Updating Monitors](##creating-and-updating-monitors)
-- [Package Configuration](##package-configuration)
+- [Package Configuration & Env Vars](##package-configuration)
 - [Command Line Usage](##command-line-usage)
 
 ## Installation
@@ -22,7 +20,7 @@ pip install cronitor
 
 ## Monitoring Background Jobs
 
-The `@cronitor.job` decorator will send telemetry event before calling your function and after it exits. If an error is raised a `fail` event will be sent. A monitor with default settings will be automatically provisioned the first time a event is received.
+The `@cronitor.job` decorator will send telemetry events before calling your function and after it exits. If your function raises an exception a `fail` event will be sent (and the exception re-raised).
 
 ```python
 import cronitor
@@ -31,6 +29,8 @@ import cronitor
 cronitor.api_key = 'apiKey123'
 
 # apply the cronitor decorator to monitor any function
+# A monitor with default settings will be automatically
+# provisioned the first time a event is received.
 @cronitor.job('send-invoices')
 def send_invoices_task(*args, **kwargs):
     ...
@@ -75,13 +75,13 @@ schedule.every().hour.do(job)
 
 ## Sending Telemetry Events
 
-If you want to send a heartbeat event, or want finer control over when/how [telemetry events](https://cronitor.io/docs/telemetry-api) are sent for your jobs, you can create a monitor instance and call the `.ping` method.
+If you want to send a heartbeat events, or want finer control over when/how [telemetry events](https://cronitor.io/docs/telemetry-api) are sent for your jobs, you can create a monitor instance and call the `.ping` method.
 
 ```python
 import cronitor
 
 monitor = cronitor.Monitor('heartbeat-monitor')
-monitor.ping()
+monitor.ping() # send a heartbeat event
 
 # optional params can be passed as keyword arguements.
 # for a complete list see https://cronitor.io/docs/telemetry-api#parameters
@@ -99,12 +99,13 @@ monitor.ping(
 
 ## Creating and Updating Monitors
 
-You can configure all of your monitors using a single YAML configuration file. This can be version controlled and synced to Cronitor as part of
+You can configure all of your monitors using a single YAML file. This can be version controlled and synced to Cronitor as part of
 a deployment or build process. For details on all of the attributes that can be set, see the [Monitor API](https://cronitor.io/docs/monitor-api) documentation.
 
 
 ```python
 import cronitor
+cronitor.api_key = 'apiKey123'
 
 cronitor.read_config('./cronitor.yaml'); # parse the yaml file of monitors
 
@@ -160,6 +161,7 @@ synthetics:
             - response.body contains ok
             - response.time < .25s
 
+# configure all of your monitors with type "event"
 events:
     production-deploy:
         notify:
@@ -211,13 +213,18 @@ monitor.delete() # destroy the monitor
 
 ## Package Configuration
 
-The package needs to be configured with your account's `API key`, which is available on the [account settings](https://cronitor.io/settings) page. You can also optionally specify an `Api Version` (default: account default) and `Environment` (default: account default).
+The package needs to be configured with your account's `API key`, which is available on the [account settings](https://cronitor.io/settings) page. You can also optionally specify an `api_version` and an `environment`. If not provided, your account default is used. These can also be supplied using the environment variables `CRONITOR_API_KEY`, `CRONITOR_API_VERSION`, `CRONITOR_ENVIRONMENT`.
 
-These can be supplied using the environment variables `CRONITOR_API_KEY`, `CRONITOR_API_VERSION`, `CRONITOR_ENVIRONMENT` or set directly on the cronitor object.
+```python
+import cronitor
 
+# your api keys can found here - https://cronitor.io/settings
+cronitor.api_key = 'apiKey123'
+cronitor.api_version = '2020-10-01'
+cronitor.environment = 'cluster_1_prod'
+```
 
 ## Command Line Usage
-
 
 ```bash
 >> python -m cronitor -h
