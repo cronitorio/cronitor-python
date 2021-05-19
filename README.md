@@ -117,16 +117,9 @@ cronitor.apply_config() # sync the monitors from the config file to Cronitor
 ```
 
 
-The `cronitor.yaml` file accepts the following attributes:
+The `cronitor.yaml` file includes three top level keys `jobs`, `checks`, `events`. You can configure monitors under each key by declaring a monitor `key` and defining [Monitor attributes](https://cronitor.io/docs/monitor-api#attributes)
 
 ```yaml
-api_key: 'optionally read Cronitor api_key from here'
-api_version: 'optionally read Cronitor api_version from here'
-environment: 'optionally set an environment for telemetry pings'
-
-# configure all of your monitors with type "job"
-# you may omit the type attribute and the key
-# of each object will be set as the monitor key
 jobs:
     nightly-database-backup:
         schedule: 0 0 * * *
@@ -170,7 +163,7 @@ events:
 
 ```
 
-You can also create and update monitors by calling `Monitor.put`.
+You can also create and update monitors by calling `Monitor.put`. For details on all of the attributes that can be set see the Monitor API [documentation)(https://cronitor.io/docs/monitor-api#attributes).
 
 ```python
 import cronitor
