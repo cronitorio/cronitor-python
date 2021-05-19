@@ -1,7 +1,7 @@
 # Cronitor Python Library
 [![Build Status](https://travis-ci.org/cronitorio/cronitor-python.svg?branch=master)](https://travis-ci.org/cronitorio/cronitor-python)
 
-[Cronitor](https://cronitor.io/) provides dead simple monitoring for cron jobs, daemons, queue workers, websites, APIs, and anything else that can send or receive an HTTP request. The Cronitor Python library provides convenient access to the Cronitor API from applications written in Python. See our [API docs](https://cronitor.io/docs/api) for detailed references on configuring monitors and sending telemetry pings.
+[Cronitor](https://cronitor.io/) provides end-to-end monitoring for background jobs, websites, APIs, and anything else that can send or receive an HTTP request. This library provides convenient access to the Cronitor API from applications written in Python. See our [API docs](https://cronitor.io/docs/api) for detailed references on configuring monitors and sending telemetry pings.
 
 In this guide:
 
