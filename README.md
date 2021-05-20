@@ -117,7 +117,7 @@ cronitor.apply_config() # sync the monitors from the config file to Cronitor
 ```
 
 
-The `cronitor.yaml` file includes three top level keys `jobs`, `checks`, `events`. You can configure monitors under each key by declaring a monitor `key` and defining [Monitor attributes](https://cronitor.io/docs/monitor-api#attributes)
+The `cronitor.yaml` file includes three top level keys `jobs`, `checks`, `events`. You can configure monitors under each key by defining [monitors](https://cronitor.io/docs/monitor-api#attributes).
 
 ```yaml
 jobs:
@@ -135,7 +135,7 @@ jobs:
             - metric.duration < 30 seconds
 
 # configure all of your monitors with type "synthetic"
-synthetics:
+checks:
     cronitor-homepage:
         request:
             url: https://cronitor.io
@@ -155,7 +155,7 @@ synthetics:
             - response.time < .25s
 
 # configure all of your monitors with type "event"
-events:
+heartbeats:
     production-deploy:
         notify:
             alerts: ['deploys-slack']
@@ -179,7 +179,7 @@ monitors = cronitor.Monitor.put(
     'notify': ['devops-alerts-slack']
   },
   {
-    'type': 'synthetic',
+    'type': 'check',
     'key': 'Orders Api Uptime',
     'schedule': 'every 45 seconds',
     'assertions': [
