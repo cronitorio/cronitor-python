@@ -16,7 +16,7 @@ CONFIG_KEYS = (
     'api_version',
     'environment',
 )
-MONITOR_TYPES = ('job', 'event', 'synthetic')
+MONITOR_TYPES = ('job', 'heartbeat', 'check')
 YAML_KEYS = CONFIG_KEYS + tuple(map(lambda t: '{}s'.format(t), MONITOR_TYPES))
 
 # configuration variables
