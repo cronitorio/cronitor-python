@@ -28,10 +28,9 @@ import cronitor
 # your api keys can found here - https://cronitor.io/settings
 cronitor.api_key = 'apiKey123'
 
-# apply the cronitor decorator to monitor any function
-# A monitor with default settings will be automatically
-# provisioned the first time a event is received.
-@cronitor.job('send-invoices')
+# Apply the cronitor decorator to monitor any function.
+# If no monitor matches the provided key, one will be created.
+@cronitor.job('send-invoices') 
 def send_invoices_task(*args, **kwargs):
     ...
 ```
@@ -180,12 +179,14 @@ monitors = cronitor.Monitor.put(
   },
   {
     'type': 'check',
-    'key': 'Orders Api Uptime',
+    'key': 'Cronitor Homepage',
     'schedule': 'every 45 seconds',
+    'request': {
+        'url': 'https://cronitor.io'
+    }
     'assertions': [
         'response.code = 200',
-        'response.time < 1.5s',
-        'response.json "open_orders" < 2000'
+        'response.time < 600ms',
     ]
   }
 )
