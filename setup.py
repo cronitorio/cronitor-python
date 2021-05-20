@@ -2,12 +2,12 @@ from setuptools import setup, find_packages
 
 setup(
     name='cronitor',
-    version='4.1.0',
+    version='4.2.0',
     packages=find_packages(),
     url='https://github.com/cronitorio/cronitor-python',
     license='MIT License',
-    author='aflanagan',
-    author_email='',
+    author='August Flanagan',
+    author_email='august@cronitor.io',
     description='A lightweight Python client for Cronitor.',
     install_requires=[
         'requests',
