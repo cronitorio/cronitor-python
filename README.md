@@ -116,7 +116,7 @@ cronitor.apply_config() # sync the monitors from the config file to Cronitor
 ```
 
 
-The `cronitor.yaml` file includes three top level keys `jobs`, `checks`, `events`. You can configure monitors under each key by defining [monitors](https://cronitor.io/docs/monitor-api#attributes).
+The `cronitor.yaml` file includes three top level keys `jobs`, `checks`, `heartbeats`. You can configure monitors under each key by defining [monitors](https://cronitor.io/docs/monitor-api#attributes).
 
 ```yaml
 jobs:
@@ -133,7 +133,6 @@ jobs:
             - metric.count > 0
             - metric.duration < 30 seconds
 
-# configure all of your monitors with type "synthetic"
 checks:
     cronitor-homepage:
         request:
@@ -153,7 +152,6 @@ checks:
             - response.body contains ok
             - response.time < .25s
 
-# configure all of your monitors with type "event"
 heartbeats:
     production-deploy:
         notify:
