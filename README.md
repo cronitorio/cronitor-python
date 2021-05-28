@@ -104,6 +104,7 @@ a deployment or build process. For details on all of the attributes that can be 
 
 ```python
 import cronitor
+
 cronitor.api_key = 'apiKey123'
 
 cronitor.read_config('./cronitor.yaml'); # parse the yaml file of monitors
