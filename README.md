@@ -107,8 +107,6 @@ import cronitor
 
 cronitor.api_key = 'apiKey123'
 
-cronitor.read_config('./cronitor.yaml'); # parse the yaml file of monitors
-
 cronitor.read_config('./cronitor.yaml') # parse the yaml file of monitors
 
 cronitor.validate_config() # send monitors to Cronitor for configuration validation
