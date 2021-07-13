@@ -85,7 +85,7 @@ def validate_config():
 def apply_config(rollback=False):
     try:
         conf = _parse_config()
-        monitors = Monitor.put(conf.get('monitors'), rollback=rollback)
+        monitors = Monitor.put(conf.get('monitors'), rollback=rollback, timeout=30)
         print("{} monitors {}".format(len(monitors), 'validated.' if rollback else 'synced to Cronitor.'))
     except (ConfigValidationError, APIValidationError, APIError, AuthenticationError) as e:
         logger.error(e)

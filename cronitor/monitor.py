@@ -52,6 +52,10 @@ class Monitor(object):
     def put(cls, monitors=None, **kwargs):
         api_key = cronitor.api_key
         rollback = False
+        timeout = 10
+        if 'timeout' in kwargs:
+            timeout = kwargs['timeout']
+            del kwargs['timeout']
         if 'rollback' in kwargs:
             rollback = kwargs['rollback']
             del kwargs['rollback']
@@ -62,7 +66,7 @@ class Monitor(object):
             cls._headers['Cronitor-Version'] = kwargs['api_version']
             del kwargs['api_version']
 
-        data = cls._put(monitors or [kwargs], api_key, rollback)
+        data = cls._put(monitors or [kwargs], api_key, rollback, timeout=timeout)
         _monitors = []
         for md in data:
             m = cls(md['key'])
@@ -72,14 +76,14 @@ class Monitor(object):
         return _monitors if len(_monitors) > 1 else _monitors[0]
 
     @classmethod
-    def _put(cls, monitors, api_key, rollback):
+    def _put(cls, monitors, api_key, rollback, timeout=10):
         payload = _prepare_payload(monitors, rollback)
 
         resp = cls._req.put(cls._monitor_api_url(),
                         auth=(api_key, ''),
                         data=json.dumps(payload),
                         headers=cls._headers,
-                        timeout=10)
+                        timeout=timeout)
 
         if resp.status_code == 200:
             return resp.json().get('monitors', [])
