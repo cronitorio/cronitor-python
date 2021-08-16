@@ -180,7 +180,7 @@ monitors = cronitor.Monitor.put([
     'schedule': 'every 45 seconds',
     'request': {
         'url': 'https://cronitor.io'
-    }
+    },
     'assertions': [
         'response.code = 200',
         'response.time < 600ms',
