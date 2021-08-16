@@ -164,7 +164,7 @@ You can also create and update monitors by calling `Monitor.put`. For details on
 ```python
 import cronitor
 
-monitors = cronitor.Monitor.put(
+monitors = cronitor.Monitor.put([
   {
     'type': 'job',
     'key': 'send-customer-invoices',
@@ -186,7 +186,7 @@ monitors = cronitor.Monitor.put(
         'response.time < 600ms',
     ]
   }
-)
+])
 ```
 
 ### Pausing, Reseting, and Deleting
