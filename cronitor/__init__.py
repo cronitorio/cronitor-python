@@ -1,8 +1,9 @@
 import logging
 import os
+import sys
 from datetime import datetime
 from functools import wraps
-import sys
+
 import yaml
 from yaml.loader import SafeLoader
 
@@ -86,6 +87,8 @@ def apply_config(rollback=False):
     try:
         conf = _parse_config()
         monitors = Monitor.put(conf.get('monitors'), rollback=rollback, timeout=30)
+        if not hasattr(monitors,'__len__'):
+            monitors = [monitors]
         print("{} monitors {}".format(len(monitors), 'validated.' if rollback else 'synced to Cronitor.'))
     except (ConfigValidationError, APIValidationError, APIError, AuthenticationError) as e:
         logger.error(e)
