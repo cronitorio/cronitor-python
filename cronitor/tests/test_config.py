@@ -10,8 +10,6 @@ YAML_PATH = './cronitor/tests/cronitor.yaml'
 
 cronitor.api_key = FAKE_API_KEY
 
-import os
-print("CWD", os.getcwd())
 with open(YAML_PATH, 'r') as conf:
     YAML_DATA = yaml.safe_load(conf)
 
