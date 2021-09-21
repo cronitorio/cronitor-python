@@ -1,10 +1,11 @@
 import copy
+import cronitor
 import unittest
-from unittest.mock import patch
+from unittest.mock import call, patch, ANY
 
 import cronitor
 
-FAKE_API_KEY = '1234567'
+FAKE_API_KEY = 'cb54ac4fd16142469f2d84fc1bbebd84XXXDEADXXX'
 
 MONITOR = {
     'type': 'job',
@@ -17,6 +18,13 @@ MONITOR = {
 }
 MONITOR_2 = copy.deepcopy(MONITOR)
 MONITOR_2['key'] = 'another-test-key'
+
+YAML_FORMAT_MONITORS = {
+    'jobs': {
+        MONITOR['key']: MONITOR,
+        MONITOR_2['key']: MONITOR_2
+    }
+}
 
 cronitor.api_key = FAKE_API_KEY
 
@@ -62,6 +70,12 @@ class MonitorTests(unittest.TestCase):
         mocked_update.return_value.status_code = 400
         with self.assertRaises(cronitor.APIValidationError):
             cronitor.Monitor.put(schedule='* * * * *')
+
+    @patch('cronitor.Monitor._put', return_value=YAML_FORMAT_MONITORS)
+    def test_create_monitors_yaml_body(self, mocked_create):
+        monitors = cronitor.Monitor.put(monitors=YAML_FORMAT_MONITORS, format='yaml')
+        self.assertIn(MONITOR['key'], monitors['jobs'])
+        self.assertIn(MONITOR_2['key'], monitors['jobs'])
 
     @patch('requests.delete')
     def test_delete_no_id(self, mocked_delete):

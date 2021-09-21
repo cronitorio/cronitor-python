@@ -1,0 +1,22 @@
+jobs:
+    replenishment-report:
+        schedule: '0 * * * *'
+    data-warehouse-exports:
+        schedule: '0 0 * * *'
+    welcome-email:
+        schedule: 'every 10 minutes'
+
+checks:
+    cronitor-homepage:
+        request:
+            url: 'https://cronitor.io'
+        assertions:
+            - 'response.time < 2s'
+
+heartbeats:
+    production-deploy:
+        notify:
+            alerts:
+                - default
+            events:
+                complete: true

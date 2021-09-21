@@ -50,11 +50,10 @@ class MonitorPingTests(unittest.TestCase):
         ping.assert_called_once_with(
             headers={
                 'User-Agent': 'cronitor-python',
-                'content-type': 'application/json'
             },
             params=params,
             timeout=5,
-            url='https://cronitor.link/ping/{}/{}'.format(FAKE_API_KEY, FAKE_KEY))
+            url='https://cronitor.link/p/{}/{}'.format(FAKE_API_KEY, FAKE_KEY))
 
 
     def test_convert_metrics_hash(self):
@@ -71,7 +70,7 @@ class PingDecoratorTests(unittest.TestCase):
 
     @patch('cronitor.Monitor.ping')
     def test_ping_wraps_function_success(self, mocked_ping):
-        calls = [call(state='run', series=ANY), call(state='complete', series=ANY, metrics={'duration': ANY})]
+        calls = [call(state='run', series=ANY), call(state='complete', series=ANY, metrics={'duration': ANY}, message=ANY)]
         self.function_call()
         mocked_ping.assert_has_calls(calls)
 

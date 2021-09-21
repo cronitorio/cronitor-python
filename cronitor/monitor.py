@@ -1,8 +1,10 @@
 import time
+import yaml
 import logging
 import json
 import os
 import requests
+from yaml.loader import SafeLoader
 
 
 import cronitor
@@ -27,21 +29,22 @@ def retry_session(retries, session=None, backoff_factor=0.3):
     session.mount('https://', adapter)
     return session
 
+JSON = 'json'
+YAML = 'yaml'
 
 class Monitor(object):
     _headers = {
         'User-Agent': 'cronitor-python',
-        'content-type': 'application/json',
     }
 
     _req = retry_session(retries=3)
 
     @classmethod
-    def as_yaml(cls, api_key=None):
+    def as_yaml(cls, api_key=None, api_version=None):
         api_key = api_key or cronitor.api_key
         resp = cls._req.get('%s.yaml' % cls._monitor_api_url(),
                         auth=(api_key, ''),
-                        headers=cls._headers,
+                        headers=dict(cls._headers, **{'Content-Type': 'application/yaml', 'Cronitor-Version': api_version}),
                         timeout=10)
         if resp.status_code == 200:
             return resp.text
@@ -51,11 +54,10 @@ class Monitor(object):
     @classmethod
     def put(cls, monitors=None, **kwargs):
         api_key = cronitor.api_key
+        api_version = cronitor.api_version
+        request_format = JSON
+
         rollback = False
-        timeout = 10
-        if 'timeout' in kwargs:
-            timeout = kwargs['timeout']
-            del kwargs['timeout']
         if 'rollback' in kwargs:
             rollback = kwargs['rollback']
             del kwargs['rollback']
@@ -63,10 +65,20 @@ class Monitor(object):
             api_key = kwargs['api_key']
             del kwargs['api_key']
         if 'api_version' in kwargs:
-            cls._headers['Cronitor-Version'] = kwargs['api_version']
+            api_version = kwargs['api_version']
             del kwargs['api_version']
+        if 'format' in kwargs:
+            request_format = kwargs['format']
+            del kwargs['format']
 
-        data = cls._put(monitors or [kwargs], api_key, rollback, timeout=timeout)
+        _monitors = monitors or [kwargs]
+        nested_format = True if type(monitors) == dict else False
+
+        data = cls._put(_monitors, api_key, rollback, request_format, api_version)
+
+        if nested_format:
+            return data
+
         _monitors = []
         for md in data:
             m = cls(md['key'])
@@ -76,17 +88,28 @@ class Monitor(object):
         return _monitors if len(_monitors) > 1 else _monitors[0]
 
     @classmethod
-    def _put(cls, monitors, api_key, rollback, timeout=10):
-        payload = _prepare_payload(monitors, rollback)
+    def _put(cls, monitors, api_key, rollback, request_format, api_version):
+        payload = _prepare_payload(monitors, rollback, request_format)
+        if request_format == YAML:
+            content_type = 'application/yaml'
+            data = yaml.dump(payload)
+            url = '{}.yaml'.format(cls._monitor_api_url())
+        else:
+            content_type = 'application/json'
+            data = json.dumps(payload)
+            url = cls._monitor_api_url()
 
-        resp = cls._req.put(cls._monitor_api_url(),
+        resp = cls._req.put(url,
                         auth=(api_key, ''),
-                        data=json.dumps(payload),
-                        headers=cls._headers,
-                        timeout=timeout)
+                        data=data,
+                        headers=dict(cls._headers, **{'Content-Type': content_type, 'Cronitor-Version': api_version}),
+                        timeout=10)
 
         if resp.status_code == 200:
-            return resp.json().get('monitors', [])
+            if request_format == YAML:
+                return yaml.load(resp.text, Loader=SafeLoader)
+            else:
+                return resp.json().get('monitors', [])
         elif resp.status_code == 400:
             raise cronitor.APIValidationError(resp.text)
         else:
@@ -98,9 +121,6 @@ class Monitor(object):
         self.api_verion = api_version or cronitor.api_version
         self.env = env or cronitor.environment
         self._data = None
-
-        if self.api_verion:
-            self._headers['Cronitor-Version'] = self.api_version
 
     @property
     def data(self):
@@ -132,15 +152,11 @@ class Monitor(object):
         if not self.api_key:
             logger.error('No API key detected. Set cronitor.api_key or initialize Monitor with kwarg.')
             return
-        try:
-            self._req.get(url=self._ping_api_url(), params=self._clean_params(params), timeout=5, headers=self._headers)
-            return True
-        except Exception:
-            logger.error('Failed to ping Cronitor with key - %s' % self.key)
-            return False
+
+        return self._req.get(url=self._ping_api_url(), params=self._clean_params(params), timeout=5, headers=self._headers)
 
     def ok(self):
-        self.ping(state=cronitor.State.ok)
+        self.ping(state=cronitor.Event.ok)
 
     def pause(self, hours):
         return self._req.get(url='{}/pause/{}'.format(self._monitor_api_url(self.key), hours))
@@ -155,7 +171,7 @@ class Monitor(object):
         resp = requests.get(self._monitor_api_url(self.key),
                             timeout=10,
                             auth=(self.api_key, ''),
-                            headers=self._headers)
+                            headers=dict(self._headers, **{'Content-Type': 'application/json', 'Cronitor-Version': self.api_verion}))
 
         if resp.status_code == 404:
             raise cronitor.MonitorNotFound("Monitor '%s' not found" % self.key)
@@ -177,16 +193,19 @@ class Monitor(object):
         }
 
     def _ping_api_url(self):
-        return "https://cronitor.link/ping/{}/{}".format(self.api_key, self.key)
+        return "https://cronitor.link/p/{}/{}".format(self.api_key, self.key)
 
     @classmethod
     def _monitor_api_url(cls, key=None):
         if not key: return "https://cronitor.io/api/monitors"
         return "https://cronitor.io/api/monitors/{}".format(key)
 
-
-def _prepare_payload(monitors, rollback=False):
-    ret = { 'monitors': monitors }
+def _prepare_payload(monitors, rollback=False, request_format=JSON):
+    ret = {}
+    if request_format == JSON:
+        ret['monitors'] = monitors
+    if request_format == YAML:
+        ret = monitors
     if rollback:
         ret['rollback'] = True
     return ret

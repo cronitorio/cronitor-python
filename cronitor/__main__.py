@@ -8,8 +8,8 @@ from .monitor import Monitor
 def main():
     parser = argparse.ArgumentParser(prog="cronitor",
                                      description='Send status messages to Cronitor ping API.')  # noqa
-    parser.add_argument('--pingApiKey', '-a', type=str,
-                        default=os.getenv('CRONITOR_PING_API_KEY', os.getenv('CRONITOR_AUTH_KEY')),
+    parser.add_argument('--apiKey', '-a', type=str,
+                        default=os.getenv('CRONITOR_API_KEY'),
                         help='Auth Key from Account page')
     parser.add_argument('--id', '-i', type=str,
                         default=os.getenv('CRONITOR_ID', os.getenv('CRONITOR_CODE')),
@@ -27,8 +27,6 @@ def main():
                        help='Send a run event')
     group.add_argument('--complete', '-C', action='store_true',
                        help='Send a complete event')
-    group.add_argument('--tick', '-t', action='store_true',
-                       help='Send an tick event')
     group.add_argument('--fail', '-f', action='store_true',
                        help='Send a fail event')
     group.add_argument('--ok', '-o', action='store_true',
@@ -43,22 +41,22 @@ def main():
         parser.print_help()
         sys.exit(1)
 
-    monitor = Monitor(id=args.id, ping_api_key=args.pingApiKey)
+    monitor = Monitor(id=args.id, api_key=args.apiKey)
 
-    ret = None
     if args.run:
-        ret = monitor.run(message=args.msg)
+        ret = monitor.ping('run', message=args.msg)
     elif args.complete:
-        ret = monitor.complete(message=args.msg)
+        ret = monitor.ping('complete', message=args.msg)
     elif args.tick:
-        ret = monitor.tick(message=args.msg)
+        ret = monitor.ping('tick', message=args.msg)
     elif args.fail:
-        ret = monitor.fail(message=args.msg)
+        ret = monitor.ping('fail', message=args.msg)
     elif args.ok:
-        ret = monitor.ok(message=args.msg)
+        ret = monitor.ping('ok', message=args.msg)
     elif args.pause:
         ret = monitor.pause(args.pause)
-
+    else:
+        ret = monitor.ping(message=args.msg)
     return ret
 
 
