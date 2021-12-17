@@ -112,6 +112,8 @@ cronitor.read_config('./cronitor.yaml') # parse the yaml file of monitors
 cronitor.validate_config() # send monitors to Cronitor for configuration validation
 
 cronitor.apply_config() # sync the monitors from the config file to Cronitor
+
+cronitor.generate_config() # generate a new config file from the Cronitor API
 ```
 
 
