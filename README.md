@@ -39,7 +39,36 @@ def send_invoices_task(*args, **kwargs):
 
 The `@cronitor.job` is a lightweight way to monitor background tasks run with libraries like Celery's [Beat Scheduler](https://docs.celeryproject.org/en/v5.0.5/reference/celery.beat.html) or the popular [schedule](https://github.com/dbader/schedule) package.
 
-#### celery example
+#### celerybeat autodiscover example
+`cronitor-python` can automatically discover all of your declared celerybeat scheduled tasks,
+creating Cronitor monitors for them and sending pings when tasks run, succeed, or fail.
+
+> Note: tasks on [solar schedules](https://docs.celeryproject.org/en/stable/userguide/periodic-tasks.html#solar-schedules) are not supported and will be ignored.
+
+```python
+import cronitor.celery
+from celery import Celery
+
+app = Celery()
+cronitor.celery.initialize(app, api_key='apiKey123')
+# Alternatively, can set cronitor.api_key directly:
+import cronitor
+cronitor.api_key = 'apiKey123'
+cronitor.celery.initialize(app)
+
+app.conf.beat_schedule = {
+    'run-me-every-minute': {
+        'task': 'tasks.every_minute_celery_task',
+        'schedule': 60
+    }
+}
+
+@app.task
+def every_minute_celery_task():
+    print("running a background job with celery...")
+```
+
+#### manual celery example
 ```python
 import cronitor
 from celery import Celery
