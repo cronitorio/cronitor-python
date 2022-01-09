@@ -58,7 +58,7 @@ def initialize(app, api_key=None):  # type: (celery.Celery, Optional[str]) -> No
             entry = schedules[name]  # type: celery.beat.ScheduleEntry
 
             # ignore all celerybeat scheduled events with the Cronitor exclusion header
-            headers = entry.options.get('headers', {})
+            headers = entry.options.pop('headers', {})
             if headers.get('x-cronitor-exclude') in (True, 'true', 'True'):
                 logger.info("celerybeat entry '{}' ignored per exclusion header".format(name))
                 continue
@@ -97,7 +97,7 @@ def initialize(app, api_key=None):  # type: (celery.Celery, Optional[str]) -> No
                                   # works better then in periodic task options
                                   app.tasks.get(entry.task).s().set(headers=headers),
                                   args=entry.args, kwargs=entry.kwargs,
-                                  name=entry.name)
+                                  name=entry.name, **(entry.options or {}))
 
         # app.conf.beat_schedule = app.conf.changes['beat_schedule']
         # To avoid recursion, since restarting celerybeat will result in this
