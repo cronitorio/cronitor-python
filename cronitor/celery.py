@@ -99,7 +99,6 @@ def initialize(app, api_key=None):  # type: (celery.Celery, Optional[str]) -> No
                                   args=entry.args, kwargs=entry.kwargs,
                                   name=entry.name, **(entry.options or {}))
 
-        # app.conf.beat_schedule = app.conf.changes['beat_schedule']
         # To avoid recursion, since restarting celerybeat will result in this
         # signal being called again, we disconnect the signal.
         beat_init.disconnect(celerybeat_startup, dispatch_uid=1)
