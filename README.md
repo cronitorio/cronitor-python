@@ -43,6 +43,8 @@ The `@cronitor.job` is a lightweight way to monitor background tasks run with li
 `cronitor-python` can automatically discover all of your declared celerybeat scheduled tasks,
 creating Cronitor monitors for them and sending pings when tasks run, succeed, or fail.
 
+Requires Celery 4.0 or higher. celerybeat autodiscover utilizes the Celery [message protocol version 2](https://docs.celeryproject.org/en/stable/internals/protocol.html#version-2).
+
 > Note: tasks on [solar schedules](https://docs.celeryproject.org/en/stable/userguide/periodic-tasks.html#solar-schedules) are not supported and will be ignored.
 
 ```python
@@ -52,9 +54,9 @@ from celery import Celery
 app = Celery()
 cronitor.celery.initialize(app, api_key='apiKey123')
 # Alternatively, can set cronitor.api_key directly:
-import cronitor
-cronitor.api_key = 'apiKey123'
-cronitor.celery.initialize(app)
+# import cronitor
+# cronitor.api_key = 'apiKey123'
+# cronitor.celery.initialize(app)
 
 app.conf.beat_schedule = {
     'run-me-every-minute': {
