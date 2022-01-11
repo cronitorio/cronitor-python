@@ -14,7 +14,7 @@ try:
     from celery.signals import beat_init, task_prerun, task_failure, task_success, task_retry
 
     if typing.TYPE_CHECKING:
-        from typing import Dict, List, Union, Optional
+        from typing import Dict, List, Union, Optional, Tuple
         import billiard.einfo
         from celery.worker.request import Request
 except ImportError:
@@ -37,9 +37,12 @@ def get_headers_from_task(task):  # type: (celery.Task) -> Dict
     return headers
 
 
-def initialize(app, api_key=None):  # type: (celery.Celery, Optional[str]) -> None
+def initialize(app, celerybeat_only=False, api_key=None):  # type: (celery.Celery, bool, Optional[str]) -> None
     if api_key:
         cronitor.api_key = api_key
+
+    if celerybeat_only:
+        cronitor.celerybeat_only = True
 
     global celerybeat_startup
     global ping_monitor_before_task
@@ -117,21 +120,44 @@ def initialize(app, api_key=None):  # type: (celery.Celery, Optional[str]) -> No
         headers = get_headers_from_task(sender)
         if 'x-cronitor-celerybeat-name' in headers:
             monitor = Monitor(headers['x-cronitor-celerybeat-name'])
-            monitor.ping(state=State.RUN, series=sender.request.id)
+        elif not cronitor.celerybeat_only:
+            monitor = Monitor(sender.name)
+        else:
+            return
+
+        monitor.ping(state=State.RUN, series=sender.request.id)
 
     @task_success.connect
     def ping_monitor_on_success(sender, **kwargs):  # type: (celery.Task, Dict) -> None
         headers = get_headers_from_task(sender)
         if 'x-cronitor-celerybeat-name' in headers:
             monitor = Monitor(headers['x-cronitor-celerybeat-name'])
-            monitor.ping(state=State.COMPLETE, series=sender.request.id)
+        elif not cronitor.celerybeat_only:
+            monitor = Monitor(sender.name)
+        else:
+            return
+
+        monitor.ping(state=State.COMPLETE, series=sender.request.id)
 
     @task_failure.connect
-    def ping_monitor_on_failure(sender, **kwargs):  # type: (celery.Task, Dict) -> None
+    def ping_monitor_on_failure(sender,  # type: celery.Task
+                                task_id,  # type: str
+                                exception,  # type: Exception
+                                args,  # type: Tuple
+                                kwargs,  # type: Dict
+                                traceback,
+                                einfo,  # type: billiard.einfo.ExceptionInfo
+                                **kwargs2  # type: Dict
+                                ):
         headers = get_headers_from_task(sender)
         if 'x-cronitor-celerybeat-name' in headers:
             monitor = Monitor(headers['x-cronitor-celerybeat-name'])
-            monitor.ping(state=State.FAIL, series=sender.request.id)
+        elif not cronitor.celerybeat_only:
+            monitor = Monitor(sender.name)
+        else:
+            return
+
+        monitor.ping(state=State.FAIL, series=sender.request.id, message=str(exception))
 
     @task_retry.connect
     def ping_monitor_on_retry(sender,  # type: celery.Task
@@ -143,5 +169,10 @@ def initialize(app, api_key=None):  # type: (celery.Celery, Optional[str]) -> No
         headers = get_headers_from_task(sender)
         if 'x-cronitor-celerybeat-name' in headers:
             monitor = Monitor(headers['x-cronitor-celerybeat-name'])
-            monitor.ping(state=State.FAIL, series=sender.request.id, message=str(reason))
+        elif not cronitor.celerybeat_only:
+            monitor = Monitor(sender.name)
+        else:
+            return
+
+        monitor.ping(state=State.FAIL, series=sender.request.id, message=str(reason))
 

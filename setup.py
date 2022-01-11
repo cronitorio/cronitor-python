@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='cronitor',
-    version='4.3.1',
+    version='4.4.0',
     packages=find_packages(),
     url='https://github.com/cronitorio/cronitor-python',
     license='MIT License',
