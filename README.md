@@ -20,28 +20,9 @@ pip install cronitor
 
 ## Monitoring Background Jobs
 
-The `@cronitor.job` decorator will send telemetry events before calling your function and after it exits. If your function raises an exception a `fail` event will be sent (and the exception re-raised).
-
-```python
-import cronitor
-
-# your api keys can found here - https://cronitor.io/settings
-cronitor.api_key = 'apiKey123'
-
-# Apply the cronitor decorator to monitor any function.
-# If no monitor matches the provided key, one will be created.
-@cronitor.job('send-invoices') 
-def send_invoices_task(*args, **kwargs):
-    ...
-```
-
-### Integrate with Cron/Scheduled Task Libraries
-
-The `@cronitor.job` is a lightweight way to monitor background tasks run with libraries like Celery's [Beat Scheduler](https://docs.celeryproject.org/en/v5.0.5/reference/celery.beat.html) or the popular [schedule](https://github.com/dbader/schedule) package.
-
-#### Celery auto-discover example
-`cronitor-python` can automatically discover all of your declared celery tasks, including your celerybeat scheduled tasks,
-creating Cronitor monitors for them and sending pings when tasks run, succeed, or fail.
+#### Celery Auto-Discover
+`cronitor-python` can automatically discover all of your declared Celery tasks, including your celerybeat scheduled tasks,
+creating monitors for them and sending pings when tasks run, succeed, or fail.
 
 Requires Celery 4.0 or higher. celery autodiscover utilizes the Celery [message protocol version 2](https://docs.celeryproject.org/en/stable/internals/protocol.html#version-2).
 
@@ -81,19 +62,21 @@ app = Celery()
 cronitor.celery.initialize(app, celerybeat_only=True)
 ```
 
-#### manual Celery example
+#### Manual Integration
+
+The `@cronitor.job` is a lightweight way to monitor any background tasks regardless of how it is executed. It will send telemetry events before calling your function and after it exits. If your function raises an exception a `fail` event will be sent (and the exception re-raised).
+
 ```python
 import cronitor
-from celery import Celery
 
-app = Celery()
+# your api keys can found here - https://cronitor.io/settings
+cronitor.api_key = 'apiKey123'
 
-# apply the @cronitor.job decorator to any function you want monitored.
-@app.task
-@cronitor.job("run-me-every-minute")
-def every_minute_celery_task():
-    print("running a background job with celery...")
-
+# Apply the cronitor decorator to monitor any function.
+# If no monitor matches the provided key, one will be created automatically.
+@cronitor.job('send-invoices') 
+def send_invoices_task(*args, **kwargs):
+    ...
 ```
 
 ## Sending Telemetry Events
