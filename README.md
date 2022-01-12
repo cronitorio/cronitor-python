@@ -39,7 +39,7 @@ def send_invoices_task(*args, **kwargs):
 
 The `@cronitor.job` is a lightweight way to monitor background tasks run with libraries like Celery's [Beat Scheduler](https://docs.celeryproject.org/en/v5.0.5/reference/celery.beat.html) or the popular [schedule](https://github.com/dbader/schedule) package.
 
-#### celery autodiscover example
+#### Celery auto-discover example
 `cronitor-python` can automatically discover all of your declared celery tasks, including your celerybeat scheduled tasks,
 creating Cronitor monitors for them and sending pings when tasks run, succeed, or fail.
 
@@ -48,16 +48,13 @@ Requires Celery 4.0 or higher. celery autodiscover utilizes the Celery [message 
 > Note: tasks on [solar schedules](https://docs.celeryproject.org/en/stable/userguide/periodic-tasks.html#solar-schedules) are not supported and will be ignored.
 
 ```python
-import cronitor.celery
+import cronitor
 from celery import Celery
 
-app = Celery()
-cronitor.celery.initialize(app, api_key='apiKey123')
-# Alternatively, can set cronitor.api_key directly:
-# import cronitor
-# cronitor.api_key = 'apiKey123'
-# cronitor.celery.initialize(app)
+# your api keys can found here - https://cronitor.io/settings
+cronitor.api_key = 'apiKey123'
 
+app = Celery()
 app.conf.beat_schedule = {
     'run-me-every-minute': {
         'task': 'tasks.every_minute_celery_task',
@@ -65,12 +62,16 @@ app.conf.beat_schedule = {
     }
 }
 
+# Discover all of your celery tasks and automatically add monitoring
+cronitor.celery.initialize(app)
+
+
 @app.task
 def every_minute_celery_task():
     print("running a background job with celery...")
 
 @app.task
-def this_task_triggered_manually():
+def non_scheduled_celery_task():
     print("Even though I'm not on a schedule, I'll still be monitored!")
 ```
 
@@ -80,38 +81,20 @@ app = Celery()
 cronitor.celery.initialize(app, celerybeat_only=True)
 ```
 
-#### manual celery example
+#### manual Celery example
 ```python
 import cronitor
 from celery import Celery
 
 app = Celery()
 
-app.conf.beat_schedule = {
-  'run-me-every-minute': {
-    'task': 'tasks.every_minute_celery_task',
-    'schedule': 60
-  }
-}
-
+# apply the @cronitor.job decorator to any function you want monitored.
 @app.task
 @cronitor.job("run-me-every-minute")
 def every_minute_celery_task():
     print("running a background job with celery...")
 
 ```
-
-#### schedule example
-```python
-import schedule
-
-@cronitor.job("hourly-schedule-job")
-def job():
-  print("running a background job...")
-
-schedule.every().hour.do(job)
-```
-
 
 ## Sending Telemetry Events
 
