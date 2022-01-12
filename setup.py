@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='cronitor',
-    version='4.3.0',
+    version='4.4.0',
     packages=find_packages(),
     url='https://github.com/cronitorio/cronitor-python',
     license='MIT License',
@@ -11,7 +11,8 @@ setup(
     description='A lightweight Python client for Cronitor.',
     install_requires=[
         'requests',
-        'pyyaml'
+        'pyyaml',
+        'humanize',
     ],
     entry_points=dict(console_scripts=['cronitor = cronitor.__main__:main'])
 )

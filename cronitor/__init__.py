@@ -26,6 +26,7 @@ api_key = os.getenv('CRONITOR_API_KEY', None)
 api_version = os.getenv('CRONITOR_API_VERSION', None)
 environment = os.getenv('CRONITOR_ENVIRONMENT', None)
 config = os.getenv('CRONITOR_CONFIG', None)
+celerybeat_only = False
 
 # this is a pointer to the module object instance itself.
 this = sys.modules[__name__]
