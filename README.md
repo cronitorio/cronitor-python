@@ -46,7 +46,6 @@ app.conf.beat_schedule = {
 # Discover all of your celery tasks and automatically add monitoring
 cronitor.celery.initialize(app)
 
-
 @app.task
 def every_minute_celery_task():
     print("running a background job with celery...")
