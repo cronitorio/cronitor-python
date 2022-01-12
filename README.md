@@ -21,10 +21,10 @@ pip install cronitor
 ## Monitoring Background Jobs
 
 #### Celery Auto-Discover
-`cronitor-python` can automatically discover all of your declared Celery tasks, including your celerybeat scheduled tasks,
+`cronitor-python` can automatically discover all of your declared Celery tasks, including your Celerybeat scheduled tasks,
 creating monitors for them and sending pings when tasks run, succeed, or fail.
 
-Requires Celery 4.0 or higher. celery autodiscover utilizes the Celery [message protocol version 2](https://docs.celeryproject.org/en/stable/internals/protocol.html#version-2).
+Requires Celery 4.0 or higher. Celery auto-discover utilizes the Celery [message protocol version 2](https://docs.celeryproject.org/en/stable/internals/protocol.html#version-2).
 
 > Note: tasks on [solar schedules](https://docs.celeryproject.org/en/stable/userguide/periodic-tasks.html#solar-schedules) are not supported and will be ignored.
 
@@ -56,7 +56,7 @@ def non_scheduled_celery_task():
     print("Even though I'm not on a schedule, I'll still be monitored!")
 ```
 
-If you want only to monitor celerybeat periodic tasks, and not tasks triggered any other way, you can set `celereybeat_only=True` when initializing:
+If you want only to monitor Celerybeat periodic tasks, and not tasks triggered any other way, you can set `celereybeat_only=True` when initializing:
 ```python
 app = Celery()
 cronitor.celery.initialize(app, celerybeat_only=True)
