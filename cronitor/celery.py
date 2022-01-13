@@ -33,7 +33,7 @@ ping_monitor_on_retry = None
 
 def get_headers_from_task(task):  # type: (celery.Task) -> Dict
     headers = task.request.headers or {}
-    headers.update(task.request.properties.get('application_headers', {}))
+    headers.update(task.request.get('properties', {}).get('application_headers', {}))
     return headers
 
 
@@ -110,7 +110,7 @@ def initialize(app, celerybeat_only=False, api_key=None):  # type: (celery.Celer
         # This isn't ideal, but seems to work.
         sender.stop()
         app.Beat().run()
-        logger.debug("Creating Cronitor monitors: %s", [m['key'] for m in monitors])
+        logger.debug("[Cronitor] creating monitors: %s", [m['key'] for m in monitors])
         Monitor.put(monitors)
 
     beat_init.connect(celerybeat_startup, dispatch_uid=1)
