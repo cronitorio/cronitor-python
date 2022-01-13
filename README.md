@@ -22,18 +22,15 @@ pip install cronitor
 
 #### Celery Auto-Discover
 `cronitor-python` can automatically discover all of your declared Celery tasks, including your Celerybeat scheduled tasks,
-creating monitors for them and sending pings when tasks run, succeed, or fail.
+creating monitors for them and sending pings when tasks run, succeed, or fail. API keys can found [here](https://cronitor.io/settings/api).
 
 Requires Celery 4.0 or higher. Celery auto-discover utilizes the Celery [message protocol version 2](https://docs.celeryproject.org/en/stable/internals/protocol.html#version-2).
 
 > Note: tasks on [solar schedules](https://docs.celeryproject.org/en/stable/userguide/periodic-tasks.html#solar-schedules) are not supported and will be ignored.
 
 ```python
-import cronitor
+import cronitor.celery
 from celery import Celery
-
-# your api keys can found here - https://cronitor.io/settings
-cronitor.api_key = 'apiKey123'
 
 app = Celery()
 app.conf.beat_schedule = {
@@ -43,8 +40,8 @@ app.conf.beat_schedule = {
     }
 }
 
-# Discover all of your celery tasks and automatically add monitoring
-cronitor.celery.initialize(app)
+# Discover all of your celery tasks and automatically add monitoring. 
+cronitor.celery.initialize(app, api_key="apiKey123")
 
 @app.task
 def every_minute_celery_task():
@@ -58,7 +55,7 @@ def non_scheduled_celery_task():
 If you want only to monitor Celerybeat periodic tasks, and not tasks triggered any other way, you can set `celereybeat_only=True` when initializing:
 ```python
 app = Celery()
-cronitor.celery.initialize(app, celerybeat_only=True)
+cronitor.celery.initialize(app, api_key="apiKey123", celerybeat_only=True)
 ```
 
 #### Manual Integration
@@ -68,7 +65,7 @@ The `@cronitor.job` is a lightweight way to monitor any background tasks regardl
 ```python
 import cronitor
 
-# your api keys can found here - https://cronitor.io/settings
+# your api keys can found here - https://cronitor.io/settings/api
 cronitor.api_key = 'apiKey123'
 
 # Apply the cronitor decorator to monitor any function.
@@ -84,6 +81,9 @@ If you want to send a heartbeat events, or want finer control over when/how [tel
 
 ```python
 import cronitor
+
+# your api keys can found here - https://cronitor.io/settings/api
+cronitor.api_key = 'apiKey123'
 
 monitor = cronitor.Monitor('heartbeat-monitor')
 monitor.ping() # send a heartbeat event
@@ -111,6 +111,7 @@ a deployment or build process. For details on all of the attributes that can be 
 ```python
 import cronitor
 
+# your api keys can found here - https://cronitor.io/settings/api
 cronitor.api_key = 'apiKey123'
 
 cronitor.read_config('./cronitor.yaml') # parse the yaml file of monitors
