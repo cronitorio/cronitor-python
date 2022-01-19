@@ -123,19 +123,18 @@ def initialize(app, celerybeat_only=False, api_key=None):  # type: (celery.Celer
             # We need to stop and restart celerybeat to get the task updates in place.
             # This isn't ideal, but seems to work.
 
-            run_beat = lambda: app.Beat(schedule=new_schedule.name).run()
+            sender.stop()
+            # Now, actually add all the periodic tasks to overwrite beat with the headers
+            for task in add_periodic_task_deferred:
+                task()
+            # Then, restart celerybeat, on the new schedule file (copied from the old one)
+            app.Beat(schedule=new_schedule.name).run()
 
         else:
-            run_beat = lambda: app.Beat().run()
+            # For django-celery, etc., we don't need to stop and restart celerybeat
+            for task in add_periodic_task_deferred:
+                task()
 
-        sender.stop()
-
-        # Now, actually add all the periodic tasks to overwrite beat with the headers
-        for task in add_periodic_task_deferred:
-            task()
-
-        # Then, restart celerybeat, on the new schedule file (copied from the old one)
-        run_beat()
         logger.debug("[Cronitor] creating monitors: %s", [m['key'] for m in monitors])
         Monitor.put(monitors)
 
