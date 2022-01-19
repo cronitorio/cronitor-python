@@ -60,7 +60,8 @@ def initialize(app, celerybeat_only=False, api_key=None):  # type: (celery.Celer
 
         # Must use the cached_property from scheduler so as not to re-open the shelve database
         scheduler = sender.scheduler  # type: celery.beat.Scheduler
-        schedules = scheduler.get_schedule()
+        # Also need to use the property here, including for django-celery-beat
+        schedules = scheduler.schedule
         monitors = []  # type: List[Dict[str, str]]
 
         add_periodic_task_deferred = []
