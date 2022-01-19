@@ -26,9 +26,13 @@ creating monitors for them and sending pings when tasks run, succeed, or fail. A
 
 Requires Celery 4.0 or higher. Celery auto-discover utilizes the Celery [message protocol version 2](https://docs.celeryproject.org/en/stable/internals/protocol.html#version-2).
 
-> Note: tasks on [solar schedules](https://docs.celeryproject.org/en/stable/userguide/periodic-tasks.html#solar-schedules) are not supported and will be ignored.
- 
-> Note: The celerybeat integration overrides the celerybeat local task run database (as referenced [here](https://docs.celeryproject.org/en/stable/userguide/periodic-tasks.html#starting-the-scheduler) in the docs), named `celerybeat-schedule` by default. If you currently specify a custom location for this database, this integration will override it. **Very** few people require setting custom locations for this database. If you fall into this group and want to use `cronitor-python`'s celerybeat integration, please reach out to Cronitor support.
+<details>
+<summary>Some important notes on support</summary>
+
+* Tasks on [solar schedules](https://docs.celeryproject.org/en/stable/userguide/periodic-tasks.html#solar-schedules) are not supported and will be ignored.
+* [`django-celery-beat`](https://docs.celeryproject.org/en/stable/userguide/periodic-tasks.html#using-custom-scheduler-classes) is not yet supported, but is in the works.
+* If you use the default `PersistentScheduler`, the celerybeat integration overrides the celerybeat local task run database (as referenced [here](https://docs.celeryproject.org/en/stable/userguide/periodic-tasks.html#starting-the-scheduler) in the docs), named `celerybeat-schedule` by default. If you currently specify a custom location for this database, this integration will override it. **Very** few people require setting custom locations for this database. If you fall into this group and want to use `cronitor-python`'s celerybeat integration, please reach out to Cronitor support.
+</details>
 
 ```python
 import cronitor.celery

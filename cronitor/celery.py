@@ -137,7 +137,6 @@ def initialize(app, celerybeat_only=False, api_key=None):  # type: (celery.Celer
                 task()
 
         logger.debug("[Cronitor] creating monitors: %s", [m['key'] for m in monitors])
-        print(monitors)
         Monitor.put(monitors)
 
     beat_init.connect(celerybeat_startup, dispatch_uid=1)
