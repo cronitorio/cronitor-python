@@ -60,7 +60,7 @@ cronitor.celery.initialize(app, api_key="apiKey123", celerybeat_only=True)
 
 #### Manual Integration
 
-The `@cronitor.job` is a lightweight way to monitor any background tasks regardless of how it is executed. It will send telemetry events before calling your function and after it exits. If your function raises an exception a `fail` event will be sent (and the exception re-raised).
+The `@cronitor.job` is a lightweight way to monitor any background task regardless of how it is executed. It will send telemetry events before calling your function and after it exits. If your function raises an exception a `fail` event will be sent (and the exception re-raised).
 
 ```python
 import cronitor
