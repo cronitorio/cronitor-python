@@ -4,6 +4,9 @@ import humanize
 import logging
 from cronitor import State, Monitor
 import cronitor
+import functools
+import shutil
+import tempfile
 import sys
 
 logger = logging.getLogger(__name__)
@@ -51,10 +54,17 @@ def initialize(app, celerybeat_only=False, api_key=None):  # type: (celery.Celer
     global ping_monitor_on_retry
 
     def celerybeat_startup(sender, **kwargs):  # type: (celery.beat.Service, Dict) -> None
-        scheduler = sender.get_scheduler()  # type: celery.beat.Scheduler
-        schedules = scheduler.get_schedule()
+        # To avoid recursion, since restarting celerybeat will result in this
+        # signal being called again, we disconnect the signal.
+        beat_init.disconnect(celerybeat_startup, dispatch_uid=1)
+
+        # Must use the cached_property from scheduler so as not to re-open the shelve database
+        scheduler = sender.scheduler  # type: celery.beat.Scheduler
+        # Also need to use the property here, including for django-celery-beat
+        schedules = scheduler.schedule
         monitors = []  # type: List[Dict[str, str]]
 
+        add_periodic_task_deferred = []
         for name in schedules:
             if name.startswith('celery.'):
                 continue
@@ -95,21 +105,37 @@ def initialize(app, celerybeat_only=False, api_key=None):  # type: (celery.Celer
                 'x-cronitor-celerybeat-name': name,
             })
 
-            app.add_periodic_task(entry.schedule,
+            add_periodic_task_deferred.append(
+                functools.partial(app.add_periodic_task,
+                                  entry.schedule,
                                   # Setting headers in the signature
-                                  # works better then in periodic task options
+                                  # works better than in periodic task options
                                   app.tasks.get(entry.task).s().set(headers=headers),
                                   args=entry.args, kwargs=entry.kwargs,
                                   name=entry.name, **(entry.options or {}))
+            )
 
-        # To avoid recursion, since restarting celerybeat will result in this
-        # signal being called again, we disconnect the signal.
-        beat_init.disconnect(celerybeat_startup, dispatch_uid=1)
+        if isinstance(sender.scheduler, celery.beat.PersistentScheduler):
+            # The celerybeat-schedule file with shelve gets corrupted really easily, so we need
+            # to set up a tempfile instead.
+            new_schedule = tempfile.NamedTemporaryFile()
+            with open(sender.schedule_filename, 'rb') as current_schedule:
+                shutil.copyfileobj(current_schedule, new_schedule)
+            # We need to stop and restart celerybeat to get the task updates in place.
+            # This isn't ideal, but seems to work.
 
-        # We need to stop and restart celerybeat to get the task updates in place.
-        # This isn't ideal, but seems to work.
-        sender.stop()
-        app.Beat().run()
+            sender.stop()
+            # Now, actually add all the periodic tasks to overwrite beat with the headers
+            for task in add_periodic_task_deferred:
+                task()
+            # Then, restart celerybeat, on the new schedule file (copied from the old one)
+            app.Beat(schedule=new_schedule.name).run()
+
+        else:
+            # For django-celery, etc., we don't need to stop and restart celerybeat
+            for task in add_periodic_task_deferred:
+                task()
+
         logger.debug("[Cronitor] creating monitors: %s", [m['key'] for m in monitors])
         Monitor.put(monitors)
 
@@ -175,4 +201,3 @@ def initialize(app, celerybeat_only=False, api_key=None):  # type: (celery.Celer
             return
 
         monitor.ping(state=State.FAIL, series=sender.request.id, message=str(reason))
-
