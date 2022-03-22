@@ -9,7 +9,6 @@ from yaml.loader import SafeLoader
 
 from .monitor import Monitor, YAML
 
-logging.basicConfig()
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 

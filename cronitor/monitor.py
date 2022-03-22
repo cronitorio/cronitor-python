@@ -11,7 +11,6 @@ import cronitor
 from urllib3.util.retry import Retry
 from requests.adapters import HTTPAdapter
 
-logging.basicConfig()
 logger = logging.getLogger(__name__)
 
 # https://stackoverflow.com/questions/49121365/implementing-retry-for-requests-in-python

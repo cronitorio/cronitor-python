@@ -22,7 +22,7 @@ pip install cronitor
 
 #### Celery Auto-Discover
 `cronitor-python` can automatically discover all of your declared Celery tasks, including your Celerybeat scheduled tasks,
-creating monitors for them and sending pings when tasks run, succeed, or fail. API keys can found [here](https://cronitor.io/settings/api).
+creating monitors for them and sending pings when tasks run, succeed, or fail. Your API keys can be found [here](https://cronitor.io/settings/api).
 
 Requires Celery 4.0 or higher. Celery auto-discover utilizes the Celery [message protocol version 2](https://docs.celeryproject.org/en/stable/internals/protocol.html#version-2).
 
@@ -66,7 +66,7 @@ cronitor.celery.initialize(app, api_key="apiKey123", celerybeat_only=True)
 
 #### Manual Integration
 
-The `@cronitor.job` is a lightweight way to monitor any background tasks regardless of how it is executed. It will send telemetry events before calling your function and after it exits. If your function raises an exception a `fail` event will be sent (and the exception re-raised).
+The `@cronitor.job` is a lightweight way to monitor any background task regardless of how it is executed. It will send telemetry events before calling your function and after it exits. If your function raises an exception a `fail` event will be sent (and the exception re-raised).
 
 ```python
 import cronitor
