@@ -149,7 +149,7 @@ class Monitor(object):
 
     def ping(self, **params):
         if not self.api_key:
-            logger.error('No API key detected. Set cronitor.api_key or initialize Monitor with kwarg.')
+            logger.error('No API key detected. Set cronitor.api_key or initialize Monitor with kwarg api_key.')
             return
 
         return self._req.get(url=self._ping_api_url(), params=self._clean_params(params), timeout=5, headers=self._headers)
@@ -158,7 +158,11 @@ class Monitor(object):
         self.ping(state=cronitor.Event.ok)
 
     def pause(self, hours):
-        return self._req.get(url='{}/pause/{}'.format(self._monitor_api_url(self.key), hours))
+        if not self.api_key:
+            logger.error('No API key detected. Set cronitor.api_key or initialize Monitor with kwarg api_key.')
+            return
+
+        return self._req.get(url='{}/pause/{}'.format(self._monitor_api_url(self.key), hours), auth=(self.api_key, ''), timeout=5, headers=self._headers)
 
     def unpause(self):
         return self.pause(0)
