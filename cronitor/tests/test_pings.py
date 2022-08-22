@@ -70,14 +70,14 @@ class PingDecoratorTests(unittest.TestCase):
 
     @patch('cronitor.Monitor.ping')
     def test_ping_wraps_function_success(self, mocked_ping):
-        calls = [call(state='run', series=ANY), call(state='complete', series=ANY, metrics={'duration': ANY}, message=ANY)]
+        calls = [call(state='run', series=ANY, env=cronitor.default_env), call(state='complete', series=ANY, metrics={'duration': ANY}, message=ANY, env=cronitor.default_env)]
         self.function_call()
         mocked_ping.assert_has_calls(calls)
 
 
     @patch('cronitor.Monitor.ping')
     def test_ping_wraps_function_raises_exception(self, mocked_ping):
-        calls = [call(state='run', series=ANY), call(state='fail', series=ANY, metrics={'duration': ANY}, message=ANY)]
+        calls = [call(state='run', series=ANY, env=cronitor.default_env), call(state='fail', series=ANY, metrics={'duration': ANY}, message=ANY, env=cronitor.default_env)]
         self.assertRaises(Exception, lambda: self.error_function_call())
         mocked_ping.assert_has_calls(calls)
 

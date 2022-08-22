@@ -18,6 +18,7 @@ api_version = os.getenv('CRONITOR_API_VERSION', None)
 environment = os.getenv('CRONITOR_ENVIRONMENT', None)
 config = os.getenv('CRONITOR_CONFIG', None)
 celerybeat_only = False
+default_env='production'
 
 # this is a pointer to the module object instance itself.
 this = sys.modules[__name__]
@@ -45,7 +46,8 @@ class State(object):
     COMPLETE = 'complete'
     FAIL = 'fail'
 
-def job(key, include_output=True):
+# include_output is deprecated in favor of log_output and can be removed in 5.0 release
+def job(key, env=default_env, log_output=True, include_output=True):
     def wrapper(func):
         @wraps(func)
         def wrapped(*args, **kwargs):
@@ -53,17 +55,17 @@ def job(key, include_output=True):
 
             monitor = Monitor(key)
             # use start as the series param to match run/fail/complete correctly
-            monitor.ping(state=State.RUN, series=start)
+            monitor.ping(state=State.RUN, series=start, env=env)
             try:
                 out = func(*args, **kwargs)
             except Exception as e:
                 duration = datetime.now().timestamp() - start
-                monitor.ping(state=State.FAIL, message=str(e), metrics={'duration': duration}, series=start)
+                monitor.ping(state=State.FAIL, message=str(e), metrics={'duration': duration}, series=start, env=env)
                 raise e
 
             duration = datetime.now().timestamp() - start
-            message = str(out) if include_output else None
-            monitor.ping(state=State.COMPLETE, message=message, metrics={'duration': duration}, series=start)
+            message = str(out) if all([log_output, include_output]) else None
+            monitor.ping(state=State.COMPLETE, message=message, metrics={'duration': duration}, series=start, env=env)
             return out
 
         return wrapped
