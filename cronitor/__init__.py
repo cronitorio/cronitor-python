@@ -12,14 +12,6 @@ from .monitor import Monitor, YAML
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-CONFIG_KEYS = (
-    'api_key',
-    'api_version',
-    'environment',
-)
-MONITOR_TYPES = ('job', 'heartbeat', 'check')
-YAML_KEYS = CONFIG_KEYS + tuple(map(lambda t: '{}s'.format(t), MONITOR_TYPES))
-
 # configuration variables
 api_key = os.getenv('CRONITOR_API_KEY', None)
 api_version = os.getenv('CRONITOR_API_VERSION', None)
@@ -92,9 +84,9 @@ def apply_config(rollback=False):
     config = read_config(output=True)
     try:
         monitors = Monitor.put(monitors=config, rollback=rollback, format=YAML)
-        job_count = len(monitors['jobs']) if 'jobs' in monitors else 0
-        check_count = len(monitors['checks']) if 'checks' in monitors else 0
-        heartbeat_count = len(monitors['heartbeats']) if 'heartbeats' in monitors else 0
+        job_count = len(monitors.get('jobs', []))
+        check_count = len(monitors.get('checks', []))
+        heartbeat_count = len(monitors.get('heartbeats', []))
         total_count = sum([job_count, check_count, heartbeat_count])
         logger.info('{} monitor{} {}'.format(total_count, 's' if total_count != 1 else '', 'validated.' if rollback else 'synced.',))
     except (yaml.YAMLError, ConfigValidationError, APIValidationError, APIError, AuthenticationError) as e:
