@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name='cronitor',
-    version='4.5.0',
+    version='4.6.0',
     packages=find_packages(),
     url='https://github.com/cronitorio/cronitor-python',
     license='MIT License',
@@ -18,6 +18,7 @@ setup(
         'requests',
         'pyyaml',
         'humanize',
+        'urllib3'
     ],
     entry_points=dict(console_scripts=['cronitor = cronitor.__main__:main'])
 )
