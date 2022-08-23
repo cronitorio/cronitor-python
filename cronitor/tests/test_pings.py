@@ -68,19 +68,27 @@ class MonitorPingTests(unittest.TestCase):
 
 class PingDecoratorTests(unittest.TestCase):
 
+    def setUp(self):
+        cronitor.api_key = FAKE_API_KEY
+
     @patch('cronitor.Monitor.ping')
     def test_ping_wraps_function_success(self, mocked_ping):
-        calls = [call(state='run', series=ANY, env=cronitor.default_env), call(state='complete', series=ANY, metrics={'duration': ANY}, message=ANY, env=cronitor.default_env)]
+        calls = [call(state='run', series=ANY), call(state='complete', series=ANY, metrics={'duration': ANY}, message=ANY)]
         self.function_call()
         mocked_ping.assert_has_calls(calls)
 
-
     @patch('cronitor.Monitor.ping')
     def test_ping_wraps_function_raises_exception(self, mocked_ping):
-        calls = [call(state='run', series=ANY, env=cronitor.default_env), call(state='fail', series=ANY, metrics={'duration': ANY}, message=ANY, env=cronitor.default_env)]
+        calls = [call(state='run', series=ANY), call(state='fail', series=ANY, metrics={'duration': ANY}, message=ANY)]
         self.assertRaises(Exception, lambda: self.error_function_call())
         mocked_ping.assert_has_calls(calls)
 
+    @patch('cronitor.Monitor.ping')
+    @patch('cronitor.Monitor.__init__')
+    def test_ping_with_non_default_env(self, mocked_monitor, mocked_ping):
+        mocked_monitor.return_value = None
+        self.staging_env_function_call()
+        mocked_monitor.assert_has_calls([call('ping-decorator-test', env='staging')])
 
     @cronitor.job('ping-decorator-test')
     def function_call(self):
@@ -89,6 +97,10 @@ class PingDecoratorTests(unittest.TestCase):
     @cronitor.job('ping-decorator-test')
     def error_function_call(self):
         raise Exception
+
+    @cronitor.job('ping-decorator-test', env='staging')
+    def staging_env_function_call(self):
+        return
 
 
 
