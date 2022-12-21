@@ -98,7 +98,6 @@ monitor.ping() # send a heartbeat event
 # for a complete list see https://cronitor.io/docs/telemetry-api#parameters
 monitor.ping(
     state='run|complete|fail|ok', # run|complete|fail used to measure lifecycle of a job, ok used for manual reset only.
-    env='', # the environment this is running in (e.g. staging, production)
     message='', # message that will be displayed in alerts as well as monitor activity panel on your dashboard.
     metrics={
         'duration': 100, # how long the job ran (complete|fail only). cronitor will calculate this when not provided
