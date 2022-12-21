@@ -91,6 +91,9 @@ import cronitor
 # your api keys can found here - https://cronitor.io/settings/api
 cronitor.api_key = 'apiKey123'
 
+# optionally, set an environment
+cronitor.environment = 'staging'
+
 monitor = cronitor.Monitor('heartbeat-monitor')
 monitor.ping() # send a heartbeat event
 
