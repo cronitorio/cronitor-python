@@ -129,6 +129,8 @@ cronitor.validate_config() # send monitors to Cronitor for configuration validat
 cronitor.apply_config() # sync the monitors from the config file to Cronitor
 
 cronitor.generate_config() # generate a new config file from the Cronitor API
+
+cronitor.diff_config('./cronitor.yaml') # compare the config file to the monitors currently configured in Cronitor
 ```
 
 

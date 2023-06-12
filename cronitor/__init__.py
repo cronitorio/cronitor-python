@@ -6,6 +6,8 @@ import sys
 import requests
 import yaml
 from yaml.loader import SafeLoader
+import difflib
+import re
 
 from .monitor import Monitor, YAML
 
@@ -104,3 +106,34 @@ def read_config(path=None, output=False):
         data = yaml.load(conf, Loader=SafeLoader)
         if output:
             return data
+
+def prepare_data_for_diff(dict):
+    return yaml.dump(dict, default_flow_style=False, sort_keys=True).split("\n")
+
+
+def diff_config(path, output=False):
+    monitor_id_regex = r'^    [a-zA-Z0-9_-]+\:'
+    monitor_name_regex = r'^      name\:'
+    remote_config = yaml.load(Monitor.as_yaml(), Loader=SafeLoader)
+    local_config = read_config(path, output=True)
+    diff_result = difflib.ndiff(prepare_data_for_diff(remote_config), prepare_data_for_diff(local_config))
+    buffer = ""
+    current_monitor = ""
+    current_name = ""
+    for line in diff_result:
+        if re.match(monitor_id_regex, line):
+            if buffer != "" and current_name != "" and current_monitor:
+                print(f'Target: {current_name}({current_monitor})')
+                print(buffer)
+                buffer = ""
+            current_monitor = line.replace(':', '').strip()
+        if re.match(monitor_name_regex, line):
+            current_name = line.replace('name: ', '').strip()
+        elif current_monitor and line.startswith("-"):
+            buffer += f"Remote : {line}\n"
+        elif current_monitor and line.startswith("+"):
+            buffer += f"Local  : {line}\n"
+        elif current_monitor and line.startswith("?"):
+            buffer += f"Diff   : {line}\n"
+    if output:
+        return diff_result
