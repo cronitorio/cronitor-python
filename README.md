@@ -46,7 +46,7 @@ app.conf.beat_schedule = {
     }
 }
 
-# Discover all of your celery tasks and automatically add monitoring. 
+# Discover all of your celery tasks and automatically add monitoring.
 cronitor.celery.initialize(app, api_key="apiKey123")
 
 @app.task
@@ -76,7 +76,7 @@ cronitor.api_key = 'apiKey123'
 
 # Apply the cronitor decorator to monitor any function.
 # If no monitor matches the provided key, one will be created automatically.
-@cronitor.job('send-invoices') 
+@cronitor.job('send-invoices')
 def send_invoices_task(*args, **kwargs):
     ...
 ```
@@ -124,11 +124,11 @@ cronitor.api_key = 'apiKey123'
 
 cronitor.read_config('./cronitor.yaml') # parse the yaml file of monitors
 
-cronitor.validate_config() # send monitors to Cronitor for configuration validation
+cronitor.validate_config() # send monitors to Cronitor for configuration validation, Timeout from CRONITOR_TIMEOUT env var or arg; CRONITOR_TIMEOUT takes priority.
 
-cronitor.apply_config() # sync the monitors from the config file to Cronitor
+cronitor.apply_config() # sync the monitors from the config file to Cronitor, Timeout from CRONITOR_TIMEOUT env var or arg; CRONITOR_TIMEOUT takes priority.
 
-cronitor.generate_config() # generate a new config file from the Cronitor API
+cronitor.generate_config() # generate a new config file from the Cronitor API, Timeout from CRONITOR_TIMEOUT env var or arg; CRONITOR_TIMEOUT takes priority.
 ```
 
 
