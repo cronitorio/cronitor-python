@@ -38,13 +38,11 @@ class Monitor(object):
     _req = retry_session(retries=3)
 
     @classmethod
-    def as_yaml(cls, api_key=None, api_version=None):
-        timeout = cronitor.timeout or 10
-        api_key = api_key or cronitor.api_key
+    def as_yaml(cls):
         resp = cls._req.get('%s.yaml' % cls._monitor_api_url(),
-                        auth=(api_key, ''),
-                        headers=dict(cls._headers, **{'Content-Type': 'application/yaml', 'Cronitor-Version': api_version}),
-                        timeout=timeout)
+                        auth=(cronitor.api_key, ''),
+                        headers=dict(cls._headers, **{'Content-Type': 'application/yaml', 'Cronitor-Version': cronitor.api_version}),
+                        timeout=cronitor.timeout)
         if resp.status_code == 200:
             return resp.text
         else:
@@ -52,20 +50,12 @@ class Monitor(object):
 
     @classmethod
     def put(cls, monitors=None, **kwargs):
-        api_key = cronitor.api_key
-        api_version = cronitor.api_version
         request_format = JSON
 
         rollback = False
         if 'rollback' in kwargs:
             rollback = kwargs['rollback']
             del kwargs['rollback']
-        if 'api_key' in kwargs:
-            api_key = kwargs['api_key']
-            del kwargs['api_key']
-        if 'api_version' in kwargs:
-            api_version = kwargs['api_version']
-            del kwargs['api_version']
         if 'format' in kwargs:
             request_format = kwargs['format']
             del kwargs['format']
@@ -73,7 +63,7 @@ class Monitor(object):
         _monitors = monitors or [kwargs]
         nested_format = True if type(monitors) == dict else False
 
-        data = cls._put(_monitors, api_key, rollback, request_format, api_version)
+        data = cls._put(_monitors, rollback, request_format)
 
         if nested_format:
             return data
@@ -87,8 +77,7 @@ class Monitor(object):
         return _monitors if len(_monitors) > 1 else _monitors[0]
 
     @classmethod
-    def _put(cls, monitors, api_key, rollback, request_format, api_version):
-        timeout = cronitor.timeout or 10
+    def _put(cls, monitors, rollback, request_format):
         payload = _prepare_payload(monitors, rollback, request_format)
         if request_format == YAML:
             content_type = 'application/yaml'
@@ -100,10 +89,10 @@ class Monitor(object):
             url = cls._monitor_api_url()
 
         resp = cls._req.put(url,
-                        auth=(api_key, ''),
+                        auth=(cronitor.api_key, ''),
                         data=data,
-                        headers=dict(cls._headers, **{'Content-Type': content_type, 'Cronitor-Version': api_version}),
-                        timeout=timeout)
+                        headers=dict(cls._headers, **{'Content-Type': content_type, 'Cronitor-Version': cronitor.api_version}),
+                        timeout=cronitor.timeout)
 
         if resp.status_code == 200:
             if request_format == YAML:
@@ -115,11 +104,8 @@ class Monitor(object):
         else:
             raise cronitor.APIError("Unexpected error %s" % resp.text)
 
-    def __init__(self, key, api_key=None, api_version=None, env=None):
+    def __init__(self, key):
         self.key = key
-        self.api_key = api_key or cronitor.api_key
-        self.api_verion = api_version or cronitor.api_version
-        self.env = env or cronitor.environment
         self._data = None
 
     @property
@@ -137,7 +123,7 @@ class Monitor(object):
     def delete(self):
         resp = requests.delete(
                     self._monitor_api_url(self.key),
-                    auth=(self.api_key, ''),
+                    auth=(cronitor.api_key, ''),
                     headers=self._headers,
                     timeout=10)
 
@@ -149,8 +135,8 @@ class Monitor(object):
             raise cronitor.APIError("An unexpected error occured when deleting '%s'" % self.key)
 
     def ping(self, **params):
-        if not self.api_key:
-            logger.error('No API key detected. Set cronitor.api_key or initialize Monitor with kwarg api_key.')
+        if not cronitor.api_key:
+            logger.error('No API key detected. Set cronitor.api_key.')
             return
 
         return self._req.get(url=self._ping_api_url(), params=self._clean_params(params), timeout=5, headers=self._headers)
@@ -159,23 +145,23 @@ class Monitor(object):
         self.ping(state=cronitor.Event.ok)
 
     def pause(self, hours):
-        if not self.api_key:
-            logger.error('No API key detected. Set cronitor.api_key or initialize Monitor with kwarg api_key.')
+        if not cronitor.api_key:
+            logger.error('No API key detected. Set cronitor.api_key.')
             return
 
-        return self._req.get(url='{}/pause/{}'.format(self._monitor_api_url(self.key), hours), auth=(self.api_key, ''), timeout=5, headers=self._headers)
+        return self._req.get(url='{}/pause/{}'.format(self._monitor_api_url(self.key), hours), auth=(cronitor.api_key, ''), timeout=5, headers=self._headers)
 
     def unpause(self):
         return self.pause(0)
 
     def _fetch(self):
-        if not self.api_key:
-            raise cronitor.AuthenticationError('No api_key detected. Set cronitor.api_key or initialize Monitor with kwarg.')
+        if not cronitor.api_key:
+            raise cronitor.AuthenticationError('No api_key detected. Set cronitor.api_key.')
 
         resp = requests.get(self._monitor_api_url(self.key),
                             timeout=10,
-                            auth=(self.api_key, ''),
-                            headers=dict(self._headers, **{'Content-Type': 'application/json', 'Cronitor-Version': self.api_verion}))
+                            auth=(cronitor.api_key, ''),
+                            headers=dict(self._headers, **{'Content-Type': 'application/json', 'Cronitor-Version': cronitor.api_verion}))
 
         if resp.status_code == 404:
             raise cronitor.MonitorNotFound("Monitor '%s' not found" % self.key)
@@ -193,11 +179,11 @@ class Monitor(object):
             'host': params.get('host', os.getenv('COMPUTERNAME', None)),
             'metric': metrics,
             'stamp': time.time(),
-            'env': self.env,
+            'env': cronitor.environment,
         }
 
     def _ping_api_url(self):
-        return "https://cronitor.link/p/{}/{}".format(self.api_key, self.key)
+        return "https://cronitor.link/p/{}/{}".format(cronitor.api_key, self.key)
 
     @classmethod
     def _monitor_api_url(cls, key=None):

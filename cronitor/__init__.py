@@ -17,9 +17,7 @@ api_key = os.getenv('CRONITOR_API_KEY', None)
 api_version = os.getenv('CRONITOR_API_VERSION', None)
 environment = os.getenv('CRONITOR_ENVIRONMENT', None)
 config = os.getenv('CRONITOR_CONFIG', None)
-timeout = os.getenv('CRONITOR_TIMEOUT', None)
-if timeout is not None:
-    timeout = int(timeout)
+timeout = int(os.getenv('CRONITOR_TIMEOUT', 10))
 
 celerybeat_only = False
 
