@@ -17,6 +17,10 @@ api_key = os.getenv('CRONITOR_API_KEY', None)
 api_version = os.getenv('CRONITOR_API_VERSION', None)
 environment = os.getenv('CRONITOR_ENVIRONMENT', None)
 config = os.getenv('CRONITOR_CONFIG', None)
+timeout = os.getenv('CRONITOR_TIMEOUT', None)
+if timeout is not None:
+    timeout = int(timeout)
+
 celerybeat_only = False
 
 # this is a pointer to the module object instance itself.

@@ -39,11 +39,12 @@ class Monitor(object):
 
     @classmethod
     def as_yaml(cls, api_key=None, api_version=None):
+        timeout = cronitor.timeout or 10
         api_key = api_key or cronitor.api_key
         resp = cls._req.get('%s.yaml' % cls._monitor_api_url(),
                         auth=(api_key, ''),
                         headers=dict(cls._headers, **{'Content-Type': 'application/yaml', 'Cronitor-Version': api_version}),
-                        timeout=10)
+                        timeout=timeout)
         if resp.status_code == 200:
             return resp.text
         else:
@@ -87,6 +88,7 @@ class Monitor(object):
 
     @classmethod
     def _put(cls, monitors, api_key, rollback, request_format, api_version):
+        timeout = cronitor.timeout or 10
         payload = _prepare_payload(monitors, rollback, request_format)
         if request_format == YAML:
             content_type = 'application/yaml'
@@ -101,7 +103,7 @@ class Monitor(object):
                         auth=(api_key, ''),
                         data=data,
                         headers=dict(cls._headers, **{'Content-Type': content_type, 'Cronitor-Version': api_version}),
-                        timeout=10)
+                        timeout=timeout)
 
         if resp.status_code == 200:
             if request_format == YAML:

@@ -9,6 +9,7 @@ FAKE_API_KEY = 'cb54ac4fd16142469f2d84fc1bbebd84XXXDEADXXX'
 YAML_PATH = './cronitor/tests/cronitor.yaml'
 
 cronitor.api_key = FAKE_API_KEY
+cronitor.timeout = 10
 
 with open(YAML_PATH, 'r') as conf:
     YAML_DATA = yaml.safe_load(conf)

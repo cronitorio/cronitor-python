@@ -46,7 +46,7 @@ app.conf.beat_schedule = {
     }
 }
 
-# Discover all of your celery tasks and automatically add monitoring. 
+# Discover all of your celery tasks and automatically add monitoring.
 cronitor.celery.initialize(app, api_key="apiKey123")
 
 @app.task
@@ -76,7 +76,7 @@ cronitor.api_key = 'apiKey123'
 
 # Apply the cronitor decorator to monitor any function.
 # If no monitor matches the provided key, one will be created automatically.
-@cronitor.job('send-invoices') 
+@cronitor.job('send-invoices')
 def send_invoices_task(*args, **kwargs):
     ...
 ```
@@ -131,6 +131,14 @@ cronitor.apply_config() # sync the monitors from the config file to Cronitor
 cronitor.generate_config() # generate a new config file from the Cronitor API
 ```
 
+The timeout value for validate_config, apply_config and generate_config is 10 seconds by default. The value can be rewritten by setting the environment variable `CRONITOR_TIMEOUT`. It can also be rewritten by assigning a value to cronitor.timeout.
+
+```python
+import cronitor
+
+cronitor.timeout = 30
+cronitor.apply_config()
+```
 
 The `cronitor.yaml` file includes three top level keys `jobs`, `checks`, `heartbeats`. You can configure monitors under each key by defining [monitors](https://cronitor.io/docs/monitor-api#attributes).
 
