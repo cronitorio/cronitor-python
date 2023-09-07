@@ -124,11 +124,11 @@ cronitor.api_key = 'apiKey123'
 
 cronitor.read_config('./cronitor.yaml') # parse the yaml file of monitors
 
-cronitor.validate_config() # send monitors to Cronitor for configuration validation.
+cronitor.validate_config() # send monitors to Cronitor for configuration validation
 
-cronitor.apply_config() # sync the monitors from the config file to Cronitor.
+cronitor.apply_config() # sync the monitors from the config file to Cronitor
 
-cronitor.generate_config() # generate a new config file from the Cronitor API.
+cronitor.generate_config() # generate a new config file from the Cronitor API
 ```
 
 The timeout value for validate_config, apply_config and generate_config is 10 seconds by default. The value can be rewritten by setting the environment variable `CRONITOR_TIMEOUT`. It can also be rewritten by assigning a value to cronitor.timeout.
