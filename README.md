@@ -124,13 +124,21 @@ cronitor.api_key = 'apiKey123'
 
 cronitor.read_config('./cronitor.yaml') # parse the yaml file of monitors
 
-cronitor.validate_config() # send monitors to Cronitor for configuration validation, Timeout from CRONITOR_TIMEOUT env var or arg; CRONITOR_TIMEOUT takes priority.
+cronitor.validate_config() # send monitors to Cronitor for configuration validation.
 
-cronitor.apply_config() # sync the monitors from the config file to Cronitor, Timeout from CRONITOR_TIMEOUT env var or arg; CRONITOR_TIMEOUT takes priority.
+cronitor.apply_config() # sync the monitors from the config file to Cronitor.
 
-cronitor.generate_config() # generate a new config file from the Cronitor API, Timeout from CRONITOR_TIMEOUT env var or arg; CRONITOR_TIMEOUT takes priority.
+cronitor.generate_config() # generate a new config file from the Cronitor API.
 ```
 
+The timeout value for validate_config, apply_config and generate_config is 10 seconds by default. The value can be rewritten by setting the environment variable `CRONITOR_TIMEOUT`. It can also be rewritten by assigning a value to cronitor.timeout.
+
+```python
+import cronitor
+
+cronitor.timeout = 30
+cronitor.apply_config()
+```
 
 The `cronitor.yaml` file includes three top level keys `jobs`, `checks`, `heartbeats`. You can configure monitors under each key by defining [monitors](https://cronitor.io/docs/monitor-api#attributes).
 

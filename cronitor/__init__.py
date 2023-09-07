@@ -20,9 +20,6 @@ config = os.getenv('CRONITOR_CONFIG', None)
 timeout = os.getenv('CRONITOR_TIMEOUT', None)
 if timeout is not None:
     timeout = int(timeout)
-    cronitor_timeout = timeout
-else:
-    cronitor_timeout = None
 
 celerybeat_only = False
 
@@ -77,24 +74,21 @@ def job(key, env=None, log_output=True, include_output=True):
         return wrapped
     return wrapper
 
-def generate_config(timeout=10):
-    timeout = cronitor_timeout or timeout
+def generate_config():
     config = this.config or './cronitor.yaml'
     with open(config, 'w') as conf:
-        conf.writelines(Monitor.as_yaml(timeout=timeout))
+        conf.writelines(Monitor.as_yaml())
 
-def validate_config(timeout=10):
-    timeout = cronitor_timeout or timeout
-    return apply_config(rollback=True, timeout=timeout)
+def validate_config():
+    return apply_config(rollback=True)
 
-def apply_config(rollback=False, timeout=10):
-    timeout = cronitor_timeout or timeout
+def apply_config(rollback=False):
     if not this.config:
         raise ConfigValidationError("Must set a path to config file e.g. cronitor.config = './cronitor.yaml'")
 
     config = read_config(output=True)
     try:
-        monitors = Monitor.put(monitors=config, timeout=timeout, rollback=rollback, format=YAML)
+        monitors = Monitor.put(monitors=config, rollback=rollback, format=YAML)
         job_count = len(monitors.get('jobs', []))
         check_count = len(monitors.get('checks', []))
         heartbeat_count = len(monitors.get('heartbeats', []))

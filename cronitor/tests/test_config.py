@@ -9,7 +9,7 @@ FAKE_API_KEY = 'cb54ac4fd16142469f2d84fc1bbebd84XXXDEADXXX'
 YAML_PATH = './cronitor/tests/cronitor.yaml'
 
 cronitor.api_key = FAKE_API_KEY
-timeout = cronitor.timeout or 10
+cronitor.timeout = 10
 
 with open(YAML_PATH, 'r') as conf:
     YAML_DATA = yaml.safe_load(conf)
@@ -29,10 +29,10 @@ class CronitorTests(unittest.TestCase):
     def test_validate_config(self, mock):
             cronitor.config = YAML_PATH
             cronitor.validate_config()
-            mock.assert_called_once_with(monitors=YAML_DATA, timeout=timeout, rollback=True, format='yaml')
+            mock.assert_called_once_with(monitors=YAML_DATA, rollback=True, format='yaml')
 
     @patch('cronitor.Monitor.put')
     def test_apply_config(self, mock):
         cronitor.config = YAML_PATH
         cronitor.apply_config()
-        mock.assert_called_once_with(monitors=YAML_DATA, timeout=timeout, rollback=False, format='yaml')
+        mock.assert_called_once_with(monitors=YAML_DATA, rollback=False, format='yaml')
