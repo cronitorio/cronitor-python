@@ -156,7 +156,7 @@ class Monitor(object):
         return self._req.get(url=self._ping_api_url(), params=self._clean_params(params), timeout=5, headers=self._headers)
 
     def ok(self):
-        self.ping(state=cronitor.Event.ok)
+        self.ping(state=cronitor.State.OK)
 
     def pause(self, hours):
         if not self.api_key:
