@@ -9,6 +9,8 @@ import cronitor
 FAKE_KEY = 'd3x0c1'
 FAKE_API_KEY = 'ping-api-key'
 
+cronitor.Monitor.put = patch('cronitor.Monitor.put')
+
 class MonitorPingTests(unittest.TestCase):
 
     def setUp(self):
@@ -83,6 +85,10 @@ class PingDecoratorTests(unittest.TestCase):
         self.assertRaises(Exception, lambda: self.error_function_call())
         mocked_ping.assert_has_calls(calls)
 
+    def test_monitor_attributes_are_put(self):
+        calls = [call([{'key': 'ping-decorator-test', 'name': 'Ping Decorator Test'}])]
+        cronitor.Monitor.put.assert_has_calls(calls)
+
     @patch('cronitor.Monitor.ping')
     @patch('cronitor.Monitor.__init__')
     def test_ping_with_non_default_env(self, mocked_monitor, mocked_ping):
@@ -94,6 +100,10 @@ class PingDecoratorTests(unittest.TestCase):
     def function_call(self):
         return
 
+    @cronitor.job('ping-decorator-test', attributes={'name': 'Ping Decorator Test'})
+    def function_call_with_attributes(self):
+        return
+
     @cronitor.job('ping-decorator-test')
     def error_function_call(self):
         raise Exception
@@ -101,6 +111,7 @@ class PingDecoratorTests(unittest.TestCase):
     @cronitor.job('ping-decorator-test', env='staging')
     def staging_env_function_call(self):
         return
+
 
 
 
