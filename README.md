@@ -87,7 +87,7 @@ To sync attributes, provide an API key with monitor:write privileges.
 ```python
 import cronitor
 
-# Copy your SDK Integration key from https://cronitor.io/settings/api
+# Copy your SDK Integration key from https://cronitor.io/app/settings/api
 cronitor.api_key = 'apiKey123'
 
 @cronitor.job('send-invoices', attributes={'schedule': '0 8 * * *', 'notify': ['devops-alerts']})
