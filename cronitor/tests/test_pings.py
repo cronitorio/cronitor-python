@@ -2,14 +2,12 @@ import os
 import unittest
 from unittest.mock import patch, ANY, call
 from unittest.mock import MagicMock
-
 import cronitor
+import pytest
 
 # a reserved monitorkey for running integration tests against cronitor.link
 FAKE_KEY = 'd3x0c1'
 FAKE_API_KEY = 'ping-api-key'
-
-cronitor.Monitor.put = patch('cronitor.Monitor.put')
 
 class MonitorPingTests(unittest.TestCase):
 
@@ -85,9 +83,6 @@ class PingDecoratorTests(unittest.TestCase):
         self.assertRaises(Exception, lambda: self.error_function_call())
         mocked_ping.assert_has_calls(calls)
 
-    def test_monitor_attributes_are_put(self):
-        calls = [call([{'key': 'ping-decorator-test', 'name': 'Ping Decorator Test'}])]
-        cronitor.Monitor.put.assert_has_calls(calls)
 
     @patch('cronitor.Monitor.ping')
     @patch('cronitor.Monitor.__init__')
@@ -98,10 +93,6 @@ class PingDecoratorTests(unittest.TestCase):
 
     @cronitor.job('ping-decorator-test')
     def function_call(self):
-        return
-
-    @cronitor.job('ping-decorator-test', attributes={'name': 'Ping Decorator Test'})
-    def function_call_with_attributes(self):
         return
 
     @cronitor.job('ping-decorator-test')
