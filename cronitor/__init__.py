@@ -3,9 +3,11 @@ import os
 from datetime import datetime
 from functools import wraps
 import sys
-import requests
 import yaml
 from yaml.loader import SafeLoader
+import time
+import atexit
+import threading
 
 from .monitor import Monitor, YAML
 
@@ -22,6 +24,9 @@ if timeout is not None:
     timeout = int(timeout)
 
 celerybeat_only = False
+
+# monitor attributes can be synced at process startup
+monitor_attributes = []
 
 # this is a pointer to the module object instance itself.
 this = sys.modules[__name__]
@@ -50,7 +55,12 @@ class State(object):
     FAIL = 'fail'
 
 # include_output is deprecated in favor of log_output and can be removed in 5.0 release
-def job(key, env=None, log_output=True, include_output=True):
+def job(key, env=None, log_output=True, include_output=True, attributes=None):
+
+    if type(attributes) is dict:
+        attributes['key'] = key
+        monitor_attributes.append(attributes)
+
     def wrapper(func):
         @wraps(func)
         def wrapped(*args, **kwargs):
@@ -108,3 +118,19 @@ def read_config(path=None, output=False):
         data = yaml.load(conf, Loader=SafeLoader)
         if output:
             return data
+
+def sync_monitors(wait=1):
+    global monitor_attributes
+    if wait > 0:
+        time.sleep(wait)
+
+    if len(monitor_attributes):
+        Monitor.put(monitor_attributes)
+        monitor_attributes = []
+
+try:
+    sync
+except NameError:
+    sync = threading.Thread(target=sync_monitors)
+    sync.start()
+    atexit.register(sync.join)

@@ -80,6 +80,21 @@ def send_invoices_task(*args, **kwargs):
     ...
 ```
 
+#### You can provide monitor attributes that will be synced when your app starts
+
+To sync attributes, provide an API key with monitor:write privileges.
+
+```python
+import cronitor
+
+# Copy your SDK Integration key from https://cronitor.io/settings/api
+cronitor.api_key = 'apiKey123'
+
+@cronitor.job('send-invoices', attributes={'schedule': '0 8 * * *', 'notify': ['devops-alerts']})
+def send_invoices_task(*args, **kwargs):
+    ...
+```
+
 ## Sending Telemetry Events
 
 If you want to send a heartbeat events, or want finer control over when/how [telemetry events](https://cronitor.io/docs/telemetry-api) are sent for your jobs, you can create a monitor instance and call the `.ping` method.
