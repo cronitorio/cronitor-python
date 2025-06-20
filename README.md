@@ -198,6 +198,7 @@ heartbeats:
             events: true # send alert when the event occurs
 
 ```
+#### Async Uploads
 If you are working with large YAML files (300+ monitors), you may hit timeouts when trying to sync monitors in a single http request. This workload to be processed asynchronously by adding the key `async: true` to the config file. The request will immediately return a `batch_key`. If a `webhook_url` parameter is included, Cronitor will POST to that URL with the results of the background processing and will include the `batch_key` matching the one returned in the initial response.
 
 ### Monitor.put
