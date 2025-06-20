@@ -126,10 +126,10 @@ monitor.ping(
 
 ## Configuring Monitors
 
+### YAML Configuration File
+
 You can configure all of your monitors using a single YAML file. This can be version controlled and synced to Cronitor as part of
 a deployment or build process. For details on all of the attributes that can be set, see the [Monitor API](https://cronitor.io/docs/monitor-api) documentation.
-
-### YAML Configuration.
 
 ```python
 import cronitor
