@@ -129,6 +129,7 @@ monitor.ping(
 You can configure all of your monitors using a single YAML file. This can be version controlled and synced to Cronitor as part of
 a deployment or build process. For details on all of the attributes that can be set, see the [Monitor API](https://cronitor.io/docs/monitor-api) documentation.
 
+### YAML Configuration.
 
 ```python
 import cronitor
@@ -197,6 +198,9 @@ heartbeats:
             events: true # send alert when the event occurs
 
 ```
+If you are working with large YAML files (300+ monitors), you may hit timeouts when trying to sync monitors in a single http request. This workload to be processed asynchronously by adding the key `async: true` to the config file. The request will immediately return a `batch_key`. If a `webhook_url` parameter is included, Cronitor will POST to that URL with the results of the background processing and will include the `batch_key` matching the one returned in the initial response.
+
+### Monitor.put
 
 You can also create and update monitors by calling `Monitor.put`. For details on all of the attributes that can be set see the Monitor API [documentation)(https://cronitor.io/docs/monitor-api#attributes).
 
