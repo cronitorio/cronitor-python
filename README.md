@@ -203,7 +203,7 @@ If you are working with large YAML files (300+ monitors), you may hit timeouts w
 
 ### Monitor.put
 
-You can also create and update monitors by calling `Monitor.put`. For details on all of the attributes that can be set see the Monitor API [documentation)(https://cronitor.io/docs/monitor-api#attributes).
+You can also create and update monitors by calling `Monitor.put`. For details on all of the attributes that can be set see the Monitor API [documentation](https://cronitor.io/docs/monitor-api#attributes).
 
 ```python
 import cronitor
