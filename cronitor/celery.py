@@ -36,7 +36,8 @@ ping_monitor_on_retry = None
 
 def get_headers_from_task(task):  # type: (celery.Task) -> Dict
     headers = task.request.headers or {}
-    headers.update(task.request.get('properties', {}).get('application_headers', {}))
+    request = task.request or {}
+    headers.update(request.get("properties", {}).get("application_headers", {}))
     return headers
 
 
