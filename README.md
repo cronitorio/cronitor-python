@@ -244,10 +244,10 @@ import cronitor
 monitors = cronitor.Monitor.list(['backup-job', 'health-check', 'send-invoices'])
 
 # Fetch all job monitors (first page, 100 results by default)
-monitors = cronitor.Monitor.list(type='job')
+monitors = cronitor.Monitor.list()
 
 # Fetch monitors with filters
-monitors = cronitor.Monitor.list(type='check', group='production', state='failing')
+monitors = cronitor.Monitor.list(type='check', state='failing')
 
 # Fetch a specific page
 monitors = cronitor.Monitor.list(type='job', page=2, pageSize=50)
