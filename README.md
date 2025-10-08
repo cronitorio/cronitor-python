@@ -233,6 +233,55 @@ monitors = cronitor.Monitor.put([
 ])
 ```
 
+### Listing and Inspecting Monitors
+
+You can fetch multiple monitors using `Monitor.list()` with optional filtering and pagination:
+
+```python
+import cronitor
+
+# Fetch specific monitors by key
+monitors = cronitor.Monitor.list(['backup-job', 'health-check', 'send-invoices'])
+
+# Fetch all job monitors (first page, 100 results by default)
+monitors = cronitor.Monitor.list(type='job')
+
+# Fetch monitors with filters
+monitors = cronitor.Monitor.list(type='check', group='production', state='failing')
+
+# Fetch a specific page
+monitors = cronitor.Monitor.list(type='job', page=2, pageSize=50)
+
+# Fetch all pages automatically
+monitors = cronitor.Monitor.list(type='job', auto_paginate=True)
+
+# Search monitors
+monitors = cronitor.Monitor.list(search='backup')
+```
+
+After fetching a monitor, access its data using the `.data` property. Nested data is automatically accessible via attributes:
+
+```python
+import cronitor
+
+# Fetch an existing monitor
+monitor = cronitor.Monitor('send-invoices')
+
+# Access monitor attributes
+print(monitor.data.name)
+print(monitor.data.type)
+print(monitor.data.schedule)
+
+# Access nested data
+print(monitor.data.attributes.code)
+if monitor.data.latest_event:
+    print(monitor.data.latest_event.stamp)
+    print(monitor.data.latest_event.event)
+
+# Pretty print the entire monitor as JSON
+print(monitor.data)
+```
+
 ### Pausing, Reseting, and Deleting
 
 ```python
@@ -297,10 +346,16 @@ Fork, then clone the repo:
 Set up your machine:
 
     pip install -r requirements
+    pip install pytest
 
 Make sure the tests pass:
 
     pytest
+
+**Optional:** Run integration tests against the real Cronitor API:
+
+    export CRONITOR_TEST_API_KEY=your_api_key_here
+    pytest cronitor/tests/test_integration.py -v
 
 Make your change. Add tests for your change. Make the tests pass:
 

@@ -124,6 +124,16 @@ class Monitor(object):
 
     @property
     def data(self):
+        """
+        Monitor data with attribute access. Nested dicts are automatically
+        converted to Structs.
+
+        Example:
+            >>> monitor = Monitor('my-monitor')
+            >>> print(monitor.data.name)
+            >>> print(monitor.data.request.url)
+            >>> print(monitor.data)  # Pretty JSON output
+        """
         if self._data and type(self._data) is not Struct:
             self._data = Struct(**self._data)
         elif not self._data:
@@ -200,6 +210,86 @@ class Monitor(object):
         return "https://cronitor.link/p/{}/{}".format(self.api_key, self.key)
 
     @classmethod
+    def list(cls, keys=None, page=1, pageSize=100, auto_paginate=False, **filters):
+        """
+        Fetch monitors with optional filtering and pagination.
+
+        Args:
+            keys: Optional list of monitor keys to fetch specifically
+            page: Page number (default: 1)
+            pageSize: Results per page (default: 100)
+            auto_paginate: If True, automatically fetch all pages (default: False)
+            **filters: type, group, tag, state, env, search, sort
+
+        Returns:
+            List of Monitor instances
+
+        Examples:
+            # Fetch specific monitors
+            monitors = Monitor.list(['key1', 'key2'])
+
+            # Fetch first page of job monitors
+            monitors = Monitor.list(type='job')
+
+            # Fetch specific page
+            monitors = Monitor.list(type='job', page=2, pageSize=50)
+
+            # Fetch all pages automatically
+            monitors = Monitor.list(type='job', auto_paginate=True)
+        """
+        if keys:
+            # Fetch specific monitors individually
+            monitors = [cls(key) for key in keys]
+            # Populate data immediately
+            for m in monitors:
+                _ = m.data  # Triggers fetch
+            return monitors
+
+        # Fetch from API with filters
+        monitors = []
+        current_page = page
+
+        while True:
+            result = cls._fetch_page(current_page, pageSize, **filters)
+            monitors.extend(result)
+
+            if not auto_paginate or len(result) < pageSize:
+                # Either not auto-paginating or no more results
+                break
+
+            current_page += 1
+
+        return monitors
+
+    @classmethod
+    def _fetch_page(cls, page, pageSize, **filters):
+        """Fetch a single page of monitors from the API"""
+        api_key = filters.pop('api_key', None) or cronitor.api_key
+        api_version = filters.pop('api_version', None) or cronitor.api_version
+        timeout = cronitor.timeout or 10
+
+        params = dict(filters, page=page, pageSize=pageSize)
+
+        resp = cls._req.get(
+            cls._monitor_api_url(),
+            auth=(api_key, ''),
+            params=params,
+            headers=dict(cls._headers, **{'Cronitor-Version': api_version}),
+            timeout=timeout
+        )
+
+        if resp.status_code == 200:
+            data = resp.json()
+            monitors = []
+            for monitor_data in data.get('monitors', []):
+                m = cls(monitor_data['key'])
+                m.data = monitor_data
+                monitors.append(m)
+            return monitors
+        else:
+            raise cronitor.APIError("Unexpected error %s" % resp.text)
+
+    @classmethod
     def _monitor_api_url(cls, key=None):
         if not key: return "https://cronitor.io/api/monitors"
         return "https://cronitor.io/api/monitors/{}".format(key)
@@ -217,4 +307,27 @@ def _prepare_payload(monitors, rollback=False, request_format=JSON):
 
 class Struct(object):
     def __init__(self, **kwargs):
-        self.__dict__.update(kwargs)
+        for key, value in kwargs.items():
+            if isinstance(value, dict):
+                value = Struct(**value)
+            elif isinstance(value, list):
+                value = [Struct(**item) if isinstance(item, dict) else item for item in value]
+            setattr(self, key, value)
+
+    def __repr__(self):
+        items = ', '.join(f'{k}={v!r}' for k, v in sorted(self.__dict__.items()))
+        return f"Struct({items})"
+
+    def __str__(self):
+        return json.dumps(self._to_dict(), indent=2, sort_keys=True, default=str)
+
+    def _to_dict(self):
+        result = {}
+        for key, value in self.__dict__.items():
+            if isinstance(value, Struct):
+                result[key] = value._to_dict()
+            elif isinstance(value, list):
+                result[key] = [item._to_dict() if isinstance(item, Struct) else item for item in value]
+            else:
+                result[key] = value
+        return result
