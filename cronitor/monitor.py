@@ -159,11 +159,22 @@ class Monitor(object):
             raise cronitor.APIError("An unexpected error occured when deleting '%s'" % self.key)
 
     def ping(self, **params):
+        """Send a telemetry ping.
+
+        ``metrics`` is an optional dict of named numeric measurements (built-ins
+        and arbitrary custom names). Encoded as repeated ``metric=name:value``
+        query params. Returns a ``requests.Response``, or ``None`` if no API key
+        is set. HTTP 200 JSON may include ``rejected_metrics`` when some
+        measurements are invalid; the event is still accepted and a warning is
+        logged. Callers that ignore the response body are unchanged.
+        """
         if not self.api_key:
             logger.error('No API key detected. Set cronitor.api_key or initialize Monitor with kwarg api_key.')
             return
 
-        return self._req.get(url=self._ping_api_url(), params=self._clean_params(params), timeout=5, headers=self._headers)
+        resp = self._req.get(url=self._ping_api_url(), params=self._clean_params(params), timeout=5, headers=self._headers)
+        self._log_rejected_metrics(resp)
+        return resp
 
     def ok(self):
         self.ping(state=cronitor.State.OK)
@@ -192,6 +203,8 @@ class Monitor(object):
         return resp.json()
 
     def _clean_params(self, params):
+        # Encode metrics dict as repeated metric=name:value query params.
+        # Built-ins (duration, count, error_count) and custom names share this format.
         metrics = None
         if 'metrics' in params and type(params['metrics']) == dict:
             metrics = ['{}:{}'.format(k,v) for k,v in params['metrics'].items()]
@@ -205,6 +218,24 @@ class Monitor(object):
             'stamp': time.time(),
             'env': self.env,
         }
+
+    def _log_rejected_metrics(self, resp):
+        rejected = _rejected_metrics_from_response(resp)
+        if not rejected:
+            return
+
+        details = []
+        for item in rejected:
+            if type(item) == dict:
+                details.append('{} ({})'.format(item.get('input'), item.get('reason')))
+            else:
+                details.append(str(item))
+
+        logger.warning(
+            'Cronitor rejected %s metric(s); the ping was still accepted. %s',
+            len(rejected),
+            '; '.join(details),
+        )
 
     def _ping_api_url(self):
         return "https://cronitor.link/p/{}/{}".format(self.api_key, self.key)
@@ -293,6 +324,30 @@ class Monitor(object):
     def _monitor_api_url(cls, key=None):
         if not key: return "https://cronitor.io/api/monitors"
         return "https://cronitor.io/api/monitors/{}".format(key)
+
+
+def _rejected_metrics_from_response(resp):
+    """Return rejected_metrics from a 200 JSON ping body, else None.
+
+    Typical pings are not JSON (e.g. ``ok``). HEAD/empty bodies are ignored.
+    """
+    if resp is None:
+        return None
+    try:
+        if getattr(resp, 'status_code', None) != 200:
+            return None
+        if not getattr(resp, 'content', None):
+            return None
+        data = resp.json()
+    except (ValueError, TypeError, AttributeError):
+        return None
+    if type(data) != dict:
+        return None
+    rejected = data.get('rejected_metrics')
+    if not rejected:
+        return None
+    return rejected
+
 
 def _prepare_payload(monitors, rollback=False, request_format=JSON):
     ret = {}
