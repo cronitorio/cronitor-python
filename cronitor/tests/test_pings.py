@@ -1,7 +1,6 @@
 import os
 import unittest
 from unittest.mock import patch, ANY, call
-from unittest.mock import MagicMock
 import cronitor
 import pytest
 
