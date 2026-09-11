@@ -3,7 +3,6 @@ import unittest
 from unittest.mock import patch, ANY, call
 from unittest.mock import MagicMock
 import cronitor
-from cronitor.monitor import _rejected_metrics_from_response
 import pytest
 
 # a reserved monitorkey for running integration tests against cronitor.link
@@ -132,83 +131,6 @@ class MonitorPingTests(unittest.TestCase):
             'offset:-1',
             'empty_batch:0',
         ])
-
-    @patch('cronitor.monitor.logger.warning')
-    @patch('cronitor.Monitor._req.get')
-    def test_ping_logs_rejected_metrics(self, ping, warning):
-        rejected = [{'input': 'bad name:1', 'reason': 'invalid name'}]
-        resp = MagicMock()
-        resp.status_code = 200
-        resp.content = b'{"rejected_metrics":[{"input":"bad name:1","reason":"invalid name"}]}'
-        resp.json.return_value = {'rejected_metrics': rejected}
-        ping.return_value = resp
-
-        monitor = cronitor.Monitor(FAKE_KEY)
-        result = monitor.ping(metrics={'bad name': 1})
-
-        self.assertIs(result, resp)
-        warning.assert_called_once()
-        self.assertIn('rejected', warning.call_args[0][0])
-        self.assertEqual(warning.call_args[0][1], 1)
-        self.assertIn('bad name:1', warning.call_args[0][2])
-        self.assertIn('invalid name', warning.call_args[0][2])
-
-    @patch('cronitor.monitor.logger.warning')
-    @patch('cronitor.Monitor._req.get')
-    def test_ping_ok_text_body_does_not_log_rejected_metrics(self, ping, warning):
-        resp = MagicMock()
-        resp.status_code = 200
-        resp.content = b'ok'
-        resp.json.side_effect = ValueError('not json')
-        ping.return_value = resp
-
-        monitor = cronitor.Monitor(FAKE_KEY)
-        result = monitor.ping()
-
-        self.assertIs(result, resp)
-        warning.assert_not_called()
-
-    @patch('cronitor.monitor.logger.warning')
-    @patch('cronitor.Monitor._req.get')
-    def test_ping_empty_body_does_not_log_rejected_metrics(self, ping, warning):
-        resp = MagicMock()
-        resp.status_code = 200
-        resp.content = b''
-        ping.return_value = resp
-
-        monitor = cronitor.Monitor(FAKE_KEY)
-        result = monitor.ping()
-
-        self.assertIs(result, resp)
-        warning.assert_not_called()
-
-    def test_rejected_metrics_from_response_parses_json(self):
-        resp = MagicMock()
-        resp.status_code = 200
-        resp.content = b'{"rejected_metrics":[{"input":"x","reason":"too many"}]}'
-        resp.json.return_value = {'rejected_metrics': [{'input': 'x', 'reason': 'too many'}]}
-        self.assertEqual(
-            _rejected_metrics_from_response(resp),
-            [{'input': 'x', 'reason': 'too many'}],
-        )
-
-    def test_rejected_metrics_from_response_ignores_non_json_and_errors(self):
-        text = MagicMock()
-        text.status_code = 200
-        text.content = b'ok'
-        text.json.side_effect = ValueError('not json')
-        self.assertIsNone(_rejected_metrics_from_response(text))
-        self.assertIsNone(_rejected_metrics_from_response(None))
-
-        empty = MagicMock()
-        empty.status_code = 200
-        empty.content = b''
-        self.assertIsNone(_rejected_metrics_from_response(empty))
-
-        error = MagicMock()
-        error.status_code = 500
-        error.content = b'{"rejected_metrics":[]}'
-        self.assertIsNone(_rejected_metrics_from_response(error))
 
 
 class PingDecoratorTests(unittest.TestCase):

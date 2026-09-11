@@ -130,27 +130,11 @@ monitor.ping(
 
 The `metrics` dict is the public API for both built-in measurements (`duration`, `count`, `error_count`) and arbitrary custom metrics. Each entry is encoded as a repeated `metric=name:value` query parameter — the same Telemetry API wire format, for example `?metric=queue_depth:42&metric=quality_score:0.87`.
 
-Cronitor's server is the authority for validation (this client does not reject names or values locally):
+Cronitor's server is the authority for these constraints (this client encodes names and values as given and does not validate locally):
 
-- **Names** are normalized to lowercase server-side. Maximum **63** characters; letters, numbers, underscores, and hyphens only. Longer names are rejected, never truncated.
+- **Names** are normalized to lowercase server-side. Maximum **63** characters; letters, numbers, underscores, and hyphens only. Longer names are not accepted (never truncated).
 - **Values** must be finite numbers, including `0`, negatives, and fractions.
 - **Limits:** at most 10 measurements per ping, and 10 distinct metric names per monitor.
-
-Invalid metrics do **not** fail the ping. The event is still accepted, and a `200` JSON body may include `rejected_metrics`:
-
-```json
-{"rejected_metrics":[{"input":"bad name:1","reason":"invalid name"}]}
-```
-
-`Monitor.ping` still returns the `requests.Response`; callers that ignore the body are unchanged. When `rejected_metrics` is present the SDK logs a warning. Typical successful pings are not JSON (for example `ok`), so only inspect the JSON body when you need rejection details:
-
-```python
-response = monitor.ping(state='complete', metrics={'queue_depth': 42, 'quality_score': 0.87})
-try:
-    rejected = response.json().get('rejected_metrics')
-except (ValueError, AttributeError):
-    rejected = None
-```
 
 You can assert on custom metrics with the same `metric.<name>` syntax as built-ins, e.g. `metric.queue_depth < 100`.
 
