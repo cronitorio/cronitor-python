@@ -126,17 +126,7 @@ monitor.ping(
 )
 ```
 
-### Custom / arbitrary metrics
-
-The `metrics` dict is the public API for both built-in measurements (`duration`, `count`, `error_count`) and arbitrary custom metrics. Each entry is encoded as a repeated `metric=name:value` query parameter — the same Telemetry API wire format, for example `?metric=queue_depth:42&metric=quality_score:0.87`.
-
-Cronitor's server is the authority for these constraints (this client encodes names and values as given and does not validate locally):
-
-- **Names** are normalized to lowercase server-side. Maximum **63** characters; letters, numbers, underscores, and hyphens only. Longer names are not accepted (never truncated).
-- **Values** must be finite numbers, including `0`, negatives, and fractions.
-- **Limits:** at most 10 measurements per ping, and 10 distinct metric names per monitor.
-
-You can assert on custom metrics with the same `metric.<name>` syntax as built-ins, e.g. `metric.queue_depth < 100`.
+Custom metric names (for example `queue_depth` or `quality_score`) use the same `metrics` dict and are sent as repeated `metric=name:value` query params. Server-side, names are lowercased, max 63 characters, and may contain letters, numbers, underscores, and hyphens.
 
 ## Configuring Monitors
 
@@ -186,12 +176,6 @@ jobs:
             - metric.count > 0
             - metric.duration < 30 seconds
 
-    process-queue:
-        schedule: every 5 minutes
-        assertions:
-            - metric.queue_depth < 100
-            - metric.quality_score > 0.8
-
 checks:
     cronitor-homepage:
         request:
@@ -234,8 +218,7 @@ monitors = cronitor.Monitor.put([
     'key': 'send-customer-invoices',
     'schedule': '0 0 * * *',
     'assertions': [
-        'metric.duration < 5 min',
-        'metric.queue_depth < 100'
+        'metric.duration < 5 min'
     ],
     'notify': ['devops-alerts-slack']
   },

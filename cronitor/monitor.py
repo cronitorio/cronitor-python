@@ -159,13 +159,6 @@ class Monitor(object):
             raise cronitor.APIError("An unexpected error occured when deleting '%s'" % self.key)
 
     def ping(self, **params):
-        """Send a telemetry ping.
-
-        ``metrics`` is an optional dict of named numeric measurements (built-ins
-        and arbitrary custom names). Encoded as repeated ``metric=name:value``
-        query params. Returns a ``requests.Response``, or ``None`` if no API key
-        is set.
-        """
         if not self.api_key:
             logger.error('No API key detected. Set cronitor.api_key or initialize Monitor with kwarg api_key.')
             return
@@ -199,8 +192,6 @@ class Monitor(object):
         return resp.json()
 
     def _clean_params(self, params):
-        # Encode metrics dict as repeated metric=name:value query params.
-        # Built-ins (duration, count, error_count) and custom names share this format.
         metrics = None
         if 'metrics' in params and type(params['metrics']) == dict:
             metrics = ['{}:{}'.format(k,v) for k,v in params['metrics'].items()]
@@ -302,7 +293,6 @@ class Monitor(object):
     def _monitor_api_url(cls, key=None):
         if not key: return "https://cronitor.io/api/monitors"
         return "https://cronitor.io/api/monitors/{}".format(key)
-
 
 def _prepare_payload(monitors, rollback=False, request_format=JSON):
     ret = {}

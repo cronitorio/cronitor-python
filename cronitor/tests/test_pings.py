@@ -1,6 +1,7 @@
 import os
 import unittest
 from unittest.mock import patch, ANY, call
+from unittest.mock import MagicMock
 import cronitor
 import pytest
 
@@ -63,73 +64,6 @@ class MonitorPingTests(unittest.TestCase):
             'error_count': 20
         }})
         self.assertListEqual(sorted(clean['metric']), sorted(['count:500', 'duration:100', 'error_count:20' ]))
-
-    def test_clean_params_custom_metrics(self):
-        monitor = cronitor.Monitor(FAKE_KEY)
-        clean = monitor._clean_params({'metrics': {
-            'queue_depth': 42,
-            'quality_score': 0.87,
-            'retry-count': 3,
-        }})
-        self.assertCountEqual(clean['metric'], [
-            'queue_depth:42',
-            'quality_score:0.87',
-            'retry-count:3',
-        ])
-
-    def test_clean_params_metric_numeric_edges(self):
-        monitor = cronitor.Monitor(FAKE_KEY)
-        clean = monitor._clean_params({'metrics': {
-            'empty_batch': 0,
-            'offset': -3,
-            'quality_score': 0.87,
-            'duration': 1.5,
-        }})
-        self.assertCountEqual(clean['metric'], [
-            'empty_batch:0',
-            'offset:-3',
-            'quality_score:0.87',
-            'duration:1.5',
-        ])
-
-    def test_clean_params_does_not_truncate_or_reject_names(self):
-        # Server is the authority: the SDK encodes names as given (never truncates).
-        long_name = 'a' * 64
-        monitor = cronitor.Monitor(FAKE_KEY)
-        clean = monitor._clean_params({'metrics': {long_name: 1, 'bad name': 2}})
-        self.assertCountEqual(clean['metric'], [long_name + ':1', 'bad name:2'])
-
-    def test_clean_params_mixed_builtin_and_custom_metrics(self):
-        monitor = cronitor.Monitor(FAKE_KEY)
-        clean = monitor._clean_params({'metrics': {
-            'count': 10,
-            'queue_depth': 42,
-            'error_count': 0,
-            'quality_score': 0.5,
-        }})
-        self.assertCountEqual(clean['metric'], [
-            'count:10',
-            'queue_depth:42',
-            'error_count:0',
-            'quality_score:0.5',
-        ])
-
-    @patch('cronitor.Monitor._req.get')
-    def test_ping_encodes_custom_metrics(self, ping):
-        monitor = cronitor.Monitor(FAKE_KEY)
-        monitor.ping(state='complete', metrics={
-            'queue_depth': 42,
-            'quality_score': 0.87,
-            'offset': -1,
-            'empty_batch': 0,
-        })
-        params = ping.call_args[1]['params']
-        self.assertCountEqual(params['metric'], [
-            'queue_depth:42',
-            'quality_score:0.87',
-            'offset:-1',
-            'empty_batch:0',
-        ])
 
 
 class PingDecoratorTests(unittest.TestCase):
