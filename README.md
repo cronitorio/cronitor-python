@@ -119,10 +119,14 @@ monitor.ping(
     metrics={
         'duration': 100, # how long the job ran (complete|fail only). cronitor will calculate this when not provided
         'count': 4500, # if your job is processing a number of items you can report a count
-        'error_count': 10 # the number of errors that occurred while this job was running
+        'error_count': 10, # the number of errors that occurred while this job was running
+        'queue_depth': 42, # custom metric: any named numeric measurement
+        'quality_score': 0.87
     }
 )
 ```
+
+Custom metric names (for example `queue_depth` or `quality_score`) use the same `metrics` dict and are sent as repeated `metric=name:value` query params. Server-side, names are lowercased, max 63 characters, and may contain letters, numbers, underscores, and hyphens.
 
 ## Configuring Monitors
 
