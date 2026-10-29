@@ -8,6 +8,7 @@ from yaml.loader import SafeLoader
 
 
 import cronitor
+from .ingest import base_url
 from urllib3.util.retry import Retry
 from requests.adapters import HTTPAdapter
 
@@ -207,7 +208,7 @@ class Monitor(object):
         }
 
     def _ping_api_url(self):
-        return "https://cronitor.link/p/{}/{}".format(self.api_key, self.key)
+        return "{}/p/{}/{}".format(base_url(), self.api_key, self.key)
 
     @classmethod
     def list(cls, keys=None, page=1, pageSize=100, auto_paginate=False, **filters):

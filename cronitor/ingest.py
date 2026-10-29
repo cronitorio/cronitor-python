@@ -1,0 +1,340 @@
+"""Envelope encoding and background transport for exception events and logs.
+
+Payloads use the Sentry envelope format and are sent to
+``{cronitor.ingest_url}/api/envelope``. Sending happens on one daemon thread
+with a bounded queue, so callers are never blocked by the network and never
+see a transport error.
+"""
+import atexit
+import gzip
+import json
+import logging
+import os
+import queue
+import threading
+import time
+from datetime import datetime, timezone
+
+import cronitor
+from ._version import __version__
+
+logger = logging.getLogger(__name__)
+
+DEFAULT_INGEST_URL = 'https://cronitor.link'
+SDK_NAME = 'cronitor-python'
+SDK_VERSION = __version__
+
+MAX_QUEUE_SIZE = 1000
+LOG_BATCH_SIZE = 100
+LOG_BATCH_INTERVAL = 5.0
+SEND_TIMEOUT = 5
+SEND_RETRIES = 1
+MAX_RETRY_AFTER = 60.0
+ATEXIT_FLUSH_TIMEOUT = 2.0
+
+EVENT_CONTENT_TYPE = 'application/json'
+LOG_CONTENT_TYPE = 'application/vnd.sentry.items.log+json'
+
+_worker_state = threading.local()
+_start_lock = threading.Lock()
+
+
+def _reset_after_fork():
+    # a lock held by another thread at fork time stays locked forever in the child
+    global _start_lock
+    _start_lock = threading.Lock()
+
+
+if hasattr(os, 'register_at_fork'):
+    os.register_at_fork(after_in_child=_reset_after_fork)
+
+
+def base_url():
+    """The scheme and host that pings and envelopes are sent to, without a trailing slash."""
+    return (cronitor.ingest_url or DEFAULT_INGEST_URL).rstrip('/')
+
+
+def envelope_url():
+    return '{}/api/envelope'.format(base_url())
+
+
+def sdk_info():
+    return {'name': SDK_NAME, 'version': SDK_VERSION}
+
+
+def auth_header(api_key):
+    return 'Sentry sentry_key={}, sentry_version=7, sentry_client={}/{}'.format(api_key, SDK_NAME, SDK_VERSION)
+
+
+def request_headers(api_key):
+    return {
+        'Content-Type': 'application/x-sentry-envelope',
+        'Content-Encoding': 'gzip',
+        'User-Agent': 'cronitor-python',
+        'X-Sentry-Auth': auth_header(api_key),
+    }
+
+
+def format_timestamp(value=None):
+    """RFC 3339 in UTC with microseconds and a Z suffix."""
+    value = value or datetime.now(timezone.utc)
+    if value.tzinfo is not None:
+        value = value.astimezone(timezone.utc)
+    return value.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
+
+
+def _json_default(value):
+    try:
+        return repr(value)
+    except Exception:
+        return '<unrepresentable %s>' % type(value).__name__
+
+
+def json_bytes(obj):
+    return json.dumps(obj, default=_json_default, ensure_ascii=False, separators=(',', ':')).encode('utf-8')
+
+
+def serialize_envelope(headers, items):
+    """Build envelope bytes from a header dict and (item_header, payload_bytes) pairs.
+
+    Every item header gets a ``length`` equal to the payload's byte length.
+    """
+    parts = [json_bytes(headers), b'\n']
+    for item_headers, payload in items:
+        item_headers = dict(item_headers, length=len(payload))
+        parts.extend([json_bytes(item_headers), b'\n', payload, b'\n'])
+    return b''.join(parts)
+
+
+def event_envelope(payload, event_id, sent_at=None):
+    headers = {'event_id': event_id, 'sent_at': format_timestamp(sent_at), 'sdk': sdk_info()}
+    item = {'type': 'event', 'content_type': EVENT_CONTENT_TYPE}
+    return serialize_envelope(headers, [(item, payload)])
+
+
+def log_envelope(records, sent_at=None):
+    headers = {'sent_at': format_timestamp(sent_at), 'sdk': sdk_info()}
+    item = {'type': 'log', 'item_count': len(records), 'content_type': LOG_CONTENT_TYPE}
+    return serialize_envelope(headers, [(item, json_bytes({'items': records}))])
+
+
+def in_worker_thread():
+    """True on the transport thread, so log handlers can ignore records the transport itself causes."""
+    return getattr(_worker_state, 'active', False)
+
+
+def _retry_after(response):
+    headers = getattr(response, 'headers', None) or {}
+    delay = None
+    try:
+        delay = float(headers.get('Retry-After'))
+    except (TypeError, ValueError):
+        limits = headers.get('X-Sentry-Rate-Limits')
+        if limits:
+            try:
+                delay = float(limits.split(',')[0].split(':')[0])
+            except ValueError:
+                delay = None
+    if delay is None:
+        delay = MAX_RETRY_AFTER
+    return max(0.0, min(delay, MAX_RETRY_AFTER))
+
+
+class Transport(object):
+    """Sends envelopes from a single daemon thread.
+
+    ``send(url, data, headers, timeout)`` performs the HTTP request and returns a
+    response with ``status_code`` and ``headers``; it is injectable for tests.
+    """
+
+    def __init__(self, send=None, sleep=None, maxsize=MAX_QUEUE_SIZE,
+                 batch_size=LOG_BATCH_SIZE, batch_interval=LOG_BATCH_INTERVAL):
+        self._send = send or self._http_send
+        self._sleep = sleep or time.sleep
+        self._maxsize = maxsize
+        self._batch_size = batch_size
+        self._batch_interval = batch_interval
+        self._session = None
+        self._queue = None
+        self._thread = None
+        self._pid = None
+        self._rate_limited_until = 0.0
+        self.dropped = 0
+
+    # caller side
+
+    def submit_event(self, event, api_key=None):
+        """Queue one event dict. Returns False when it was not queued."""
+        api_key = self._api_key(api_key)
+        if not api_key:
+            return False
+        return self._put(('event', envelope_url(), api_key, event['event_id'], json_bytes(event)))
+
+    def submit_log(self, record, api_key=None):
+        """Queue one log record dict. Returns False when it was not queued."""
+        api_key = self._api_key(api_key)
+        if not api_key:
+            return False
+        return self._put(('log', envelope_url(), api_key, record))
+
+    def flush(self, timeout=2.0):
+        """Wait up to ``timeout`` seconds for queued items, including buffered logs, to be sent."""
+        if self._thread is None or self._pid != os.getpid() or not self._thread.is_alive():
+            return True
+        deadline = time.monotonic() + timeout
+        done = threading.Event()
+        try:
+            self._queue.put(('flush', done), timeout=timeout)
+        except queue.Full:
+            return False
+        return done.wait(max(0.0, deadline - time.monotonic()))
+
+    def _api_key(self, api_key):
+        api_key = api_key or cronitor.api_key
+        if not api_key:
+            logger.error('No API key detected. Set cronitor.api_key to send exceptions and logs.')
+        return api_key
+
+    def _put(self, item):
+        try:
+            self._ensure_worker()
+            self._queue.put_nowait(item)
+            return True
+        except queue.Full:
+            self.dropped += 1
+            if self.dropped == 1 or self.dropped % 1000 == 0:
+                logger.warning('Cronitor ingest queue is full, %d item(s) dropped so far.', self.dropped)
+            return False
+        except Exception as e:
+            logger.warning('Cronitor could not queue an item: %s', e)
+            return False
+
+    def _ensure_worker(self):
+        pid = os.getpid()
+        if self._pid == pid and self._thread is not None and self._thread.is_alive():
+            return
+        with _start_lock:
+            if self._pid == pid and self._thread is not None and self._thread.is_alive():
+                return
+            if self._pid != pid or self._queue is None:
+                # first use, or a forked child: items queued by the parent are not ours to send
+                self._queue = queue.Queue(maxsize=self._maxsize)
+            thread = threading.Thread(target=self._run, args=(self._queue,), name='cronitor-ingest')
+            thread.daemon = True
+            thread.start()
+            self._thread = thread
+            self._pid = pid
+        _register_atexit()
+
+    # worker side
+
+    def _run(self, q):
+        _worker_state.active = True
+        buffers = {}
+        deadline = None
+        while True:
+            timeout = None if deadline is None else max(0.0, deadline - time.monotonic())
+            try:
+                item = q.get(timeout=timeout)
+            except queue.Empty:
+                self._flush_logs(buffers)
+                deadline = None
+                continue
+            try:
+                kind = item[0]
+                if kind == 'event':
+                    _, url, api_key, event_id, payload = item
+                    self._deliver(url, api_key, event_envelope(payload, event_id))
+                elif kind == 'log':
+                    _, url, api_key, record = item
+                    batch = buffers.setdefault((url, api_key), [])
+                    batch.append(record)
+                    if deadline is None:
+                        deadline = time.monotonic() + self._batch_interval
+                    if len(batch) >= self._batch_size:
+                        del buffers[(url, api_key)]
+                        self._deliver(url, api_key, log_envelope(batch))
+                        if not buffers:
+                            deadline = None
+                elif kind == 'flush':
+                    self._flush_logs(buffers)
+                    deadline = None
+                    item[1].set()
+            except Exception as e:
+                logger.warning('Cronitor could not send an envelope: %s', e)
+            finally:
+                q.task_done()
+
+    def _flush_logs(self, buffers):
+        while buffers:
+            (url, api_key), batch = buffers.popitem()
+            try:
+                self._deliver(url, api_key, log_envelope(batch))
+            except Exception as e:
+                logger.warning('Cronitor could not send logs: %s', e)
+
+    def _deliver(self, url, api_key, body):
+        wait = self._rate_limited_until - time.monotonic()
+        if wait > 0:
+            self._sleep(wait)
+        try:
+            response = self._send(url, gzip.compress(body, 6), request_headers(api_key), SEND_TIMEOUT)
+        except Exception as e:
+            logger.warning('Cronitor could not send an envelope to %s: %s', url, e)
+            return
+        status = getattr(response, 'status_code', None)
+        if status == 429:
+            delay = _retry_after(response)
+            self._rate_limited_until = time.monotonic() + delay
+            logger.warning('Cronitor rate limited the envelope; pausing sends for %.0f seconds.', delay)
+        elif status is not None and status >= 400:
+            logger.warning('Cronitor rejected an envelope with HTTP %s.', status)
+
+    def _http_send(self, url, data, headers, timeout):
+        if self._session is None:
+            from .monitor import retry_session
+            self._session = retry_session(retries=SEND_RETRIES)
+        return self._session.post(url, data=data, headers=headers, timeout=timeout)
+
+
+_transport = Transport()
+_atexit_registered = False
+
+
+def get_transport():
+    return _transport
+
+
+def set_transport(transport):
+    """Replace the module transport (for tests or a custom ``send``). Returns the previous one."""
+    global _transport
+    previous, _transport = _transport, transport
+    return previous
+
+
+def submit_event(event, api_key=None):
+    return _transport.submit_event(event, api_key=api_key)
+
+
+def submit_log(record, api_key=None):
+    return _transport.submit_log(record, api_key=api_key)
+
+
+def flush(timeout=2.0):
+    """Block up to ``timeout`` seconds while queued events and logs are sent."""
+    try:
+        return _transport.flush(timeout)
+    except Exception as e:
+        logger.warning('Cronitor flush failed: %s', e)
+        return False
+
+
+def _flush_at_exit():
+    flush(ATEXIT_FLUSH_TIMEOUT)
+
+
+def _register_atexit():
+    global _atexit_registered
+    if not _atexit_registered:
+        _atexit_registered = True
+        atexit.register(_flush_at_exit)

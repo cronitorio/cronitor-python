@@ -10,6 +10,8 @@ import atexit
 import threading
 
 from .monitor import Monitor, YAML
+from . import ingest
+from .ingest import flush
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -22,6 +24,9 @@ config = os.getenv('CRONITOR_CONFIG', None)
 timeout = os.getenv('CRONITOR_TIMEOUT', None)
 if timeout is not None:
     timeout = int(timeout)
+
+# base URL for telemetry pings and exception/log envelopes, e.g. http://localhost:9100 in development
+ingest_url = os.getenv('CRONITOR_INGEST_URL') or ingest.DEFAULT_INGEST_URL
 
 celerybeat_only = False
 
