@@ -416,6 +416,9 @@ class Transport(object):
             logger.warning('Cronitor could not send an envelope to %s: %s', url, e)
             return
         status = getattr(response, 'status_code', None)
+        if not isinstance(status, int):
+            # a transport stub or an unexpected response object: nothing to act on
+            return
         if status == 429:
             delay = _retry_after(response)
             self._rate_limited_until = time.monotonic() + delay
