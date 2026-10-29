@@ -173,8 +173,10 @@ The body is formatted with `str.format`, and the template and parameters are kep
 ```python
 import logging
 
-logging.getLogger().addHandler(cronitor.LogHandler(level=logging.INFO))
+logging.getLogger().addHandler(cronitor.LogHandler())
 ```
+
+The handler ships `INFO` and above by default, so a root logger set to `DEBUG` does not send every library's debug lines. Use `cronitor.LogHandler(level=logging.DEBUG)` to include them. A record keeps at most 50 attributes, with keys cut to 64 characters and values to 400 (8,000 for the body, the message template and the exception message and stack trace).
 
 Logs are batched (100 records or 5 seconds). Queued events and logs are flushed when the process exits; call `cronitor.flush(timeout=2.0)` to flush earlier, for example at the end of a serverless handler.
 

@@ -34,7 +34,11 @@ MAX_TAGS = 50
 MAX_TAG_KEY_LENGTH = 64
 MAX_TAG_VALUE_LENGTH = 400
 MAX_ATTRIBUTES = 50
-MAX_ATTRIBUTE_VALUE_LENGTH = 8000
+MAX_ATTRIBUTE_KEY_LENGTH = 64
+MAX_ATTRIBUTE_VALUE_LENGTH = 400
+# log attributes holding long text, which the server keeps as long as a body
+TEXT_ATTRIBUTES = frozenset(['exception.stacktrace', 'exception.message', 'sentry.message.template'])
+MAX_TEXT_ATTRIBUTE_LENGTH = 8000
 MAX_CHAINED_EXCEPTIONS = 10
 MAX_FRAMES = 100
 MAX_LINE_LENGTH = 1000
@@ -420,7 +424,7 @@ def _exception_attributes(exc_type, exc_value, tb):
         'exception.type': getattr(exc_type, '__name__', _safe_str(exc_type)),
         'exception.message': _safe_str(exc_value),
         # keep the end, where the crash site and the message are
-        'exception.stacktrace': stacktrace[-MAX_ATTRIBUTE_VALUE_LENGTH:],
+        'exception.stacktrace': stacktrace[-MAX_TEXT_ATTRIBUTE_LENGTH:],
     }
 
 
@@ -463,7 +467,7 @@ def _log_record(level, body, attributes, timestamp=None):
     if service:
         attrs[SERVICE_TAG] = _safe_str(service)
     for key, value in user.items():
-        key = _safe_str(key)
+        key = _truncate(_safe_str(key), MAX_ATTRIBUTE_KEY_LENGTH)
         if key in attrs or len(attrs) >= MAX_ATTRIBUTES:
             continue
         attrs[key] = value
@@ -472,11 +476,13 @@ def _log_record(level, body, attributes, timestamp=None):
         'timestamp': time.time() if timestamp is None else float(timestamp),
         'level': level,
         'body': _truncate(body, MAX_LOG_BODY_LENGTH),
-        'attributes': {key: _typed(value) for key, value in attrs.items()},
+        'attributes': {key: _typed(value, MAX_TEXT_ATTRIBUTE_LENGTH if key in TEXT_ATTRIBUTES
+                                   else MAX_ATTRIBUTE_VALUE_LENGTH)
+                       for key, value in attrs.items()},
     }
 
 
-def _typed(value):
+def _typed(value, max_length):
     if isinstance(value, bool):
         return {'value': value, 'type': 'boolean'}
     if isinstance(value, int):
@@ -485,7 +491,7 @@ def _typed(value):
         return {'value': value, 'type': 'double'}
     if not isinstance(value, str):
         value = _safe_repr(value)
-    return {'value': _truncate(value, MAX_ATTRIBUTE_VALUE_LENGTH), 'type': 'string'}
+    return {'value': _truncate(value, max_length), 'type': 'string'}
 
 
 # logging integration
@@ -514,9 +520,12 @@ class LogHandler(logging.Handler):
     Records are batched by the background transport. A record with exc_info
     carries the formatted traceback in the ``exception.stacktrace`` attribute;
     no separate exception event is sent.
+
+    The default level is INFO, so a root logger at DEBUG does not ship every
+    library's debug lines; pass ``level=logging.DEBUG`` to include them.
     """
 
-    def __init__(self, level=logging.NOTSET):
+    def __init__(self, level=logging.INFO):
         super(LogHandler, self).__init__(level)
 
     def emit(self, record):

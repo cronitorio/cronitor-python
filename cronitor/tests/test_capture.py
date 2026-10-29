@@ -455,6 +455,28 @@ class LoggerTests(CaptureTestCase):
         self.assertEqual(len(record['attributes']), 50)
         self.assertIn('sentry.severity_number', record['attributes'])
 
+    def test_attribute_keys_and_values_are_capped(self):
+        cronitor.logger.info('caps', **{'k' * 100: 'v', 'k' * 64 + 'other': 'w',
+                                        'plain': 'x' * 1000, 'items': list(range(1000))})
+        attributes = self.flushed_logs()[0]['attributes']
+        self.assertEqual(attributes['k' * 64], {'value': 'v', 'type': 'string'})
+        self.assertTrue(all(len(key) <= 64 for key in attributes))
+        self.assertEqual(len(attributes['plain']['value']), 400)
+        self.assertEqual(len(attributes['items']['value']), 400)
+
+    def test_template_and_exception_text_keep_8000_characters(self):
+        template = '{n} ' + 't' * 9000
+        try:
+            raise ValueError('m' * 9000)
+        except ValueError:
+            cronitor.logger.exception(template, n='p' * 1000)
+        record = self.flushed_logs()[0]
+        self.assertEqual(len(record['body']), 8000)
+        self.assertEqual(_attr(record, 'sentry.message.template')['value'], template[:8000])
+        self.assertEqual(len(_attr(record, 'sentry.message.parameter.n')['value']), 400)
+        self.assertEqual(len(_attr(record, 'exception.message')['value']), 8000)
+        self.assertEqual(len(_attr(record, 'exception.stacktrace')['value']), 8000)
+
     def test_stdlib_configuration_calls_still_work(self):
         import logging
         stdlib = logging.getLogger('cronitor')
@@ -679,7 +701,7 @@ class LogHandlerTests(CaptureTestCase):
         self.log = logging.getLogger('cronitor.tests.handler')
         self.log.propagate = False
         self.log.setLevel(1)
-        self.handler = cronitor.LogHandler()
+        self.handler = cronitor.LogHandler(level=logging.NOTSET)
         self.log.addHandler(self.handler)
         self.addCleanup(self.log.removeHandler, self.handler)
 
@@ -757,7 +779,24 @@ class LogHandlerTests(CaptureTestCase):
 
     def test_handler_level_argument(self):
         self.assertEqual(cronitor.LogHandler(logging.ERROR).level, logging.ERROR)
-        self.assertEqual(cronitor.LogHandler().level, logging.NOTSET)
+        self.assertEqual(cronitor.LogHandler(level=logging.DEBUG).level, logging.DEBUG)
+
+    def test_default_level_is_info(self):
+        # a root logger at DEBUG would otherwise ship every library's debug lines
+        self.log.removeHandler(self.handler)
+        handler = cronitor.LogHandler()
+        self.assertEqual(handler.level, logging.INFO)
+        self.log.addHandler(handler)
+        self.addCleanup(self.log.removeHandler, handler)
+        self.log.debug('dropped')
+        self.log.info('kept')
+        self.assertEqual([r['body'] for r in self.flushed_logs()], ['kept'])
+
+    def test_long_parameters_are_capped(self):
+        self.log.info('%s', 'p' * 1000)
+        record = self.flushed_logs()[0]
+        self.assertEqual(len(record['body']), 1000)
+        self.assertEqual(len(_attr(record, 'sentry.message.parameter.0')['value']), 400)
 
     def test_records_inside_a_job_are_bound(self):
         @cronitor.job('handler-job')
