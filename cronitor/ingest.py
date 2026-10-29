@@ -232,18 +232,27 @@ def in_worker_thread():
     return getattr(_worker_state, 'active', False)
 
 
+def _seconds(value):
+    try:
+        seconds = float(value)
+    except (TypeError, ValueError):
+        return None
+    return seconds if math.isfinite(seconds) else None
+
+
 def _retry_after(response):
+    """Seconds to stop sending after a 429, at most MAX_RETRY_AFTER.
+
+    As in Sentry's SDKs, X-Sentry-Rate-Limits wins over Retry-After; the first
+    field of its first entry is the retry-after in seconds. With neither, the maximum.
+    """
     headers = getattr(response, 'headers', None) or {}
     delay = None
-    try:
-        delay = float(headers.get('Retry-After'))
-    except (TypeError, ValueError):
-        limits = headers.get('X-Sentry-Rate-Limits')
-        if limits:
-            try:
-                delay = float(limits.split(',')[0].split(':')[0])
-            except ValueError:
-                delay = None
+    limits = headers.get('X-Sentry-Rate-Limits')
+    if limits:
+        delay = _seconds(limits.split(',')[0].split(':')[0])
+    if delay is None:
+        delay = _seconds(headers.get('Retry-After'))
     if delay is None:
         delay = MAX_RETRY_AFTER
     return max(0.0, min(delay, MAX_RETRY_AFTER))
@@ -254,12 +263,12 @@ class Transport(object):
 
     ``send(url, data, headers, timeout)`` performs the HTTP request and returns a
     response with ``status_code`` and ``headers``; it is injectable for tests.
+    ``dropped`` counts the items lost to a full queue or to a rate limit.
     """
 
-    def __init__(self, send=None, sleep=None, maxsize=MAX_QUEUE_SIZE,
+    def __init__(self, send=None, maxsize=MAX_QUEUE_SIZE,
                  batch_size=LOG_BATCH_SIZE, batch_interval=LOG_BATCH_INTERVAL):
         self._send = send or self._http_send
-        self._sleep = sleep or time.sleep
         self._maxsize = maxsize
         self._batch_size = batch_size
         self._batch_interval = batch_interval
@@ -268,6 +277,7 @@ class Transport(object):
         self._thread = None
         self._pid = None
         self._rate_limited_until = 0.0
+        self._reported_rate_limit = False
         self._reported_missing_key = False
         self.dropped = 0
 
@@ -369,7 +379,7 @@ class Transport(object):
                         deadline = time.monotonic() + self._batch_interval
                     if len(batch) >= self._batch_size:
                         del buffers[(url, api_key)]
-                        self._deliver(url, api_key, log_envelope(batch))
+                        self._deliver(url, api_key, log_envelope(batch), len(batch))
                         if not buffers:
                             deadline = None
                 elif kind == 'flush':
@@ -385,14 +395,21 @@ class Transport(object):
         while buffers:
             (url, api_key), batch = buffers.popitem()
             try:
-                self._deliver(url, api_key, log_envelope(batch))
+                self._deliver(url, api_key, log_envelope(batch), len(batch))
             except Exception as e:
                 logger.warning('Cronitor could not send logs: %s', e)
 
-    def _deliver(self, url, api_key, body):
-        wait = self._rate_limited_until - time.monotonic()
-        if wait > 0:
-            self._sleep(wait)
+    def _deliver(self, url, api_key, body, count=1):
+        """Send one envelope holding ``count`` items, or drop it while rate limited."""
+        left = self._rate_limited_until - time.monotonic()
+        if left > 0:
+            # dropped rather than waited out, so the items queued behind it are not
+            # delayed into the exit flush and lost there
+            self.dropped += count
+            if not self._reported_rate_limit:
+                self._reported_rate_limit = True
+                logger.warning('Cronitor is rate limited for %.0f more seconds; dropping envelopes until then.', left)
+            return
         try:
             response = self._send(url, gzip.compress(body, 6), request_headers(api_key), SEND_TIMEOUT)
         except Exception as e:
@@ -402,7 +419,8 @@ class Transport(object):
         if status == 429:
             delay = _retry_after(response)
             self._rate_limited_until = time.monotonic() + delay
-            logger.warning('Cronitor rate limited the envelope; pausing sends for %.0f seconds.', delay)
+            self._reported_rate_limit = False
+            logger.warning('Cronitor rate limited the envelope (HTTP 429); not sending for %.0f seconds.', delay)
         elif status is not None and status >= 400:
             logger.warning('Cronitor rejected an envelope with HTTP %s.', status)
 

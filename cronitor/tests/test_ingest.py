@@ -197,9 +197,8 @@ class TransportTests(unittest.TestCase):
         self._saved_url = cronitor.ingest_url
         cronitor.api_key = FAKE_API_KEY
         cronitor.ingest_url = ingest.DEFAULT_INGEST_URL
-        self.sleeps = []
         self.send = RecordingSend()
-        self.transport = ingest.Transport(send=self.send, sleep=self.sleeps.append)
+        self.transport = ingest.Transport(send=self.send)
 
     def tearDown(self):
         self.transport.flush(1.0)
@@ -316,37 +315,80 @@ class TransportTests(unittest.TestCase):
             self.transport.flush(2.0)
         self.assertIn('403', '\n'.join(logs.output))
 
-    def test_429_sleeps_retry_after_before_next_send(self):
+    def rate_limit_left(self):
+        return self.transport._rate_limited_until - time.monotonic()
+
+    def test_429_drops_envelopes_until_retry_after_without_waiting(self):
         self.send.responses = [FakeResponse(429, {'Retry-After': '7'})]
+        with self.assertLogs('cronitor.ingest', 'WARNING') as logs:
+            self.transport.submit_event(_event('1' * 32))
+            self.assertTrue(self.transport.flush(2.0))
+            self.assertAlmostEqual(self.rate_limit_left(), 7, delta=1)
+            self.transport.submit_event(_event('2' * 32))
+            for i in range(3):
+                self.transport.submit_log(_record('during the limit %d' % i))
+            # nothing waits out the limit, so queued items are not held past the exit flush
+            self.assertTrue(self.transport.flush(2.0))
+        self.assertEqual(len(self.send.calls), 1)
+        self.assertEqual(self.transport.dropped, 4)
+        # the 429 and the first drop in its window are logged, later drops are not
+        self.assertEqual(len(logs.output), 2, logs.output)
+        self.assertIn('rate limited', logs.output[1])
+
+        self.transport._rate_limited_until = time.monotonic() - 1  # the window has passed
+        self.transport.submit_event(_event('3' * 32))
+        self.assertTrue(self.transport.flush(2.0))
+        self.assertEqual([h['event_id'] for h, _ in self.send.envelopes()], ['1' * 32, '3' * 32])
+
+    def test_drops_are_logged_once_per_limit_window(self):
+        self.send.responses = [FakeResponse(429, {'Retry-After': '5'}), FakeResponse(429, {'Retry-After': '5'})]
+        with self.assertLogs('cronitor.ingest', 'WARNING') as logs:
+            for _ in range(2):
+                self.transport.submit_event(_event('1' * 32))
+                self.transport.flush(2.0)
+                self.transport.submit_event(_event('2' * 32))
+                self.transport.submit_event(_event('3' * 32))
+                self.transport.flush(2.0)
+                self.transport._rate_limited_until = time.monotonic() - 1
+        self.assertEqual(len(self.send.calls), 2)
+        self.assertEqual(self.transport.dropped, 4)
+        self.assertEqual(len(logs.output), 4, logs.output)
+
+    def test_sentry_rate_limits_header_wins_over_retry_after(self):
+        self.send.responses = [FakeResponse(429, {'Retry-After': '30',
+                                                  'X-Sentry-Rate-Limits': '5:error;default:organization, 50:transaction'})]
         with self.assertLogs('cronitor.ingest', 'WARNING'):
             self.transport.submit_event(_event('1' * 32))
             self.transport.flush(2.0)
-        self.assertEqual(self.sleeps, [])
-        self.transport.submit_event(_event('2' * 32))
-        self.transport.flush(2.0)
-        self.assertEqual(len(self.sleeps), 1)
-        self.assertAlmostEqual(self.sleeps[0], 7, delta=1)
-        self.assertEqual(len(self.send.calls), 2)
+        self.assertAlmostEqual(self.rate_limit_left(), 5, delta=1)
+
+    def test_retry_after_parsing(self):
+        def retry_after(headers):
+            return ingest._retry_after(FakeResponse(429, headers))
+
+        self.assertEqual(retry_after({'X-Sentry-Rate-Limits': '12::organization', 'Retry-After': '30'}), 12)
+        self.assertEqual(retry_after({'X-Sentry-Rate-Limits': 'garbage', 'Retry-After': '30'}), 30)
+        self.assertEqual(retry_after({'X-Sentry-Rate-Limits': '3600:error'}), 60)
+        self.assertEqual(retry_after({'Retry-After': '7'}), 7)
+        self.assertEqual(retry_after({'Retry-After': '3600'}), 60)
+        self.assertEqual(retry_after({'Retry-After': 'Wed, 21 Oct 2026 07:28:00 GMT'}), 60)
+        self.assertEqual(retry_after({'Retry-After': 'nan'}), 60)
+        self.assertEqual(retry_after({}), 60)
 
     def test_429_retry_after_is_capped_at_60_seconds(self):
         self.send.responses = [FakeResponse(429, {'Retry-After': '3600'})]
         with self.assertLogs('cronitor.ingest', 'WARNING'):
             self.transport.submit_event(_event('1' * 32))
             self.transport.flush(2.0)
-        self.transport.submit_log(_record('after the limit'))
-        self.transport.flush(2.0)
-        self.assertEqual(len(self.sleeps), 1)
-        self.assertLessEqual(self.sleeps[0], 60)
-        self.assertGreater(self.sleeps[0], 58)
+        self.assertLessEqual(self.rate_limit_left(), 60)
+        self.assertGreater(self.rate_limit_left(), 58)
 
     def test_429_without_retry_after_waits_60_seconds(self):
         self.send.responses = [FakeResponse(429)]
         with self.assertLogs('cronitor.ingest', 'WARNING'):
             self.transport.submit_event(_event('1' * 32))
             self.transport.flush(2.0)
-        self.transport.submit_event(_event('2' * 32))
-        self.transport.flush(2.0)
-        self.assertGreater(self.sleeps[0], 58)
+        self.assertGreater(self.rate_limit_left(), 58)
 
     def test_full_queue_drops_and_counts(self):
         release = threading.Event()
@@ -477,13 +519,18 @@ class LocalCollectorTests(unittest.TestCase):
         cronitor.api_key, cronitor.ingest_url = self._saved
 
     def test_envelopes_and_pings_reach_the_ingest_url(self):
-        sleeps = []
-        transport = ingest.Transport(sleep=sleeps.append)
-        self.statuses.extend([(200, {}), (429, {'Retry-After': '3'}), (200, {})])
+        transport = ingest.Transport()
+        self.statuses.extend([(200, {}), (429, {'Retry-After': '30', 'X-Sentry-Rate-Limits': '3:error:organization'}),
+                              (200, {})])
         transport.submit_event(_event('1' * 32))
         transport.submit_event(_event('2' * 32))
         with self.assertLogs('cronitor.ingest', 'WARNING'):
             self.assertTrue(transport.flush(5.0))
+            self.assertAlmostEqual(transport._rate_limited_until - time.monotonic(), 3, delta=1)
+            transport.submit_log(_record('during the limit'))
+            self.assertTrue(transport.flush(5.0))
+        self.assertEqual(transport.dropped, 1)
+        transport._rate_limited_until = time.monotonic() - 1
         transport.submit_log(_record('after 429'))
         self.assertTrue(transport.flush(5.0))
 
@@ -496,8 +543,6 @@ class LocalCollectorTests(unittest.TestCase):
         self.assertTrue(headers['X-Sentry-Auth'].startswith('Sentry sentry_key=%s, sentry_version=7,' % FAKE_API_KEY))
         header, items = parse_envelope(body)
         self.assertEqual(header['event_id'], '1' * 32)
-        self.assertEqual(len(sleeps), 1)
-        self.assertAlmostEqual(sleeps[0], 3, delta=1)
         self.assertEqual(parse_envelope(self.received[2][3])[1][0][1]['items'][0]['body'], 'after 429')
 
         cronitor.Monitor('local-job').ping(state='run')
