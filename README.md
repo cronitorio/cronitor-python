@@ -135,7 +135,7 @@ import cronitor
 cronitor.api_key = 'apiKey123'        # a telemetry key is enough
 cronitor.environment = 'production'   # optional
 cronitor.release = '2.4.1'            # optional, or CRONITOR_RELEASE
-cronitor.app = 'billing-service'      # optional, or CRONITOR_APP: the app monitor these events belong to
+cronitor.service = 'billing-api'      # optional, or CRONITOR_SERVICE: the service monitor these events belong to
 ```
 
 #### Exceptions inside `@cronitor.job`
@@ -210,7 +210,7 @@ cronitor.read_config('./cronitor.yaml') # parse the yaml file of monitors
 
 cronitor.validate_config() # send monitors to Cronitor for configuration validation
 
-cronitor.apply_config() # sync the monitors from the config file to Cronitor
+cronitor.servicely_config() # sync the monitors from the config file to Cronitor
 
 cronitor.generate_config() # generate a new config file from the Cronitor API
 ```
@@ -221,7 +221,7 @@ The timeout value for validate_config, apply_config and generate_config is 10 se
 import cronitor
 
 cronitor.timeout = 30
-cronitor.apply_config()
+cronitor.servicely_config()
 ```
 
 The `cronitor.yaml` file includes three top level keys `jobs`, `checks`, `heartbeats`. You can configure monitors under each key by defining [monitors](https://cronitor.io/docs/monitor-api#attributes).
@@ -368,7 +368,7 @@ monitor.delete() # destroy the monitor
 
 The package needs to be configured with your account's `API key`, which is available on the [account settings](https://cronitor.io/settings) page. You can also optionally specify an `api_version` and an `environment`. If not provided, your account default is used. These can also be supplied using the environment variables `CRONITOR_API_KEY`, `CRONITOR_API_VERSION`, `CRONITOR_ENVIRONMENT`.
 
-Telemetry pings, exceptions and logs are sent to `https://cronitor.link` by default. Set `cronitor.ingest_url` or `CRONITOR_INGEST_URL` to send them elsewhere, for example `http://localhost:9100` in development. `cronitor.release` (`CRONITOR_RELEASE`) is attached to exceptions and logs. `cronitor.app` (`CRONITOR_APP`) names the app monitor that exceptions and logs belong to; a `cronitor.app` tag or attribute on a single call overrides it.
+Telemetry pings, exceptions and logs are sent to `https://cronitor.link` by default. Set `cronitor.ingest_url` or `CRONITOR_INGEST_URL` to send them elsewhere, for example `http://localhost:9100` in development. `cronitor.release` (`CRONITOR_RELEASE`) is attached to exceptions and logs. `cronitor.service` (`CRONITOR_SERVICE`) names the service monitor that exceptions and logs belong to; a `cronitor.service` tag or attribute on a single call overrides it.
 
 ```python
 import cronitor

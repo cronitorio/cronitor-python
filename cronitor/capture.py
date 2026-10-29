@@ -24,7 +24,7 @@ _log = logging.getLogger(__name__)
 
 MONITOR_TAG = 'cronitor.monitor'
 SERIES_TAG = 'cronitor.series'
-APP_TAG = 'cronitor.app'
+SERVICE_TAG = 'cronitor.service'
 
 MAX_VALUE_LENGTH = 4000
 MAX_MESSAGE_LENGTH = 4000
@@ -191,9 +191,9 @@ def _base_event(level, monitor, series, tags, extra, env):
         bound[MONITOR_TAG] = monitor
     if series is not None:
         bound[SERIES_TAG] = series
-    app = user_tags.get(APP_TAG) or cronitor.app
-    if app:
-        bound[APP_TAG] = app
+    service = user_tags.get(SERVICE_TAG) or cronitor.service
+    if service:
+        bound[SERVICE_TAG] = service
     event_tags = {}
     for key, value in list(bound.items()) + list(user_tags.items()):
         key = _truncate(_safe_str(key), MAX_TAG_KEY_LENGTH)
@@ -379,7 +379,7 @@ def _capture_log(level, body, attributes, extra_attributes=None, timestamp=None)
 def _log_record(level, body, attributes, timestamp=None):
     user = dict(attributes)
     monitor, series, env = _binding(user.pop(MONITOR_TAG, None), user.pop(SERIES_TAG, None), None)
-    app = user.pop(APP_TAG, None) or cronitor.app
+    service = user.pop(SERVICE_TAG, None) or cronitor.service
 
     attrs = {
         'sentry.severity_number': LOG_SEVERITY[level],
@@ -396,8 +396,8 @@ def _log_record(level, body, attributes, timestamp=None):
         attrs[MONITOR_TAG] = _safe_str(monitor)
     if series is not None:
         attrs[SERIES_TAG] = _safe_str(series)
-    if app:
-        attrs[APP_TAG] = _safe_str(app)
+    if service:
+        attrs[SERVICE_TAG] = _safe_str(service)
     for key, value in user.items():
         key = _safe_str(key)
         if key in attrs or len(attrs) >= MAX_ATTRIBUTES:
