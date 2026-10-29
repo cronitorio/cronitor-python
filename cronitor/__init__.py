@@ -31,6 +31,8 @@ if timeout is not None:
 ingest_url = os.getenv('CRONITOR_INGEST_URL') or ingest.DEFAULT_INGEST_URL
 # attached to exception events and logs
 release = os.getenv('CRONITOR_RELEASE', None)
+# app monitor key that exception events and logs belong to, unless a call names another
+app = os.getenv('CRONITOR_APP', None)
 # send an exception event when a function decorated with @cronitor.job raises
 capture_exceptions = True
 

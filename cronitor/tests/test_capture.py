@@ -642,3 +642,43 @@ class LogHandlerTests(CaptureTestCase):
             ingest._worker_state.active = False
         self.log.info('kept')
         self.assertEqual([r['body'] for r in self.flushed_logs()], ['kept'])
+
+
+class AppSettingTests(CaptureTestCase):
+    """cronitor.app binds every event and log record to an app monitor unless a call says otherwise."""
+
+    def setUp(self):
+        super().setUp()
+        cronitor.app = None
+
+    def tearDown(self):
+        cronitor.app = None
+        super().tearDown()
+
+    def test_default_is_unset(self):
+        self.assertIsNone(cronitor.app)
+        cronitor.capture_message('hi')
+        self.assertNotIn('cronitor.app', self.only_event()['tags'])
+
+    def test_global_app_tags_events(self):
+        cronitor.app = 'billing-service'
+        cronitor.capture_message('hi', monitor='nightly-backup')
+        self.assertEqual(self.only_event()['tags'],
+                         {'cronitor.monitor': 'nightly-backup', 'cronitor.app': 'billing-service'})
+
+    def test_explicit_tag_overrides_global_app(self):
+        cronitor.app = 'billing-service'
+        cronitor.capture_message('hi', tags={'cronitor.app': 'other-app'})
+        self.assertEqual(self.only_event()['tags'], {'cronitor.app': 'other-app'})
+
+    def test_global_app_on_log_records(self):
+        cronitor.app = 'billing-service'
+        cronitor.logger.info('hello')
+        record = self.flushed_logs()[0]
+        self.assertEqual(_attr(record, 'cronitor.app'), {'value': 'billing-service', 'type': 'string'})
+
+    def test_log_attribute_overrides_global_app(self):
+        cronitor.app = 'billing-service'
+        cronitor.logger.info('hello', **{'cronitor.app': 'other-app'})
+        record = self.flushed_logs()[0]
+        self.assertEqual(_attr(record, 'cronitor.app')['value'], 'other-app')

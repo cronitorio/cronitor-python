@@ -135,6 +135,7 @@ import cronitor
 cronitor.api_key = 'apiKey123'        # a telemetry key is enough
 cronitor.environment = 'production'   # optional
 cronitor.release = '2.4.1'            # optional, or CRONITOR_RELEASE
+cronitor.app = 'billing-service'      # optional, or CRONITOR_APP: the app monitor these events belong to
 ```
 
 #### Exceptions inside `@cronitor.job`
@@ -367,7 +368,7 @@ monitor.delete() # destroy the monitor
 
 The package needs to be configured with your account's `API key`, which is available on the [account settings](https://cronitor.io/settings) page. You can also optionally specify an `api_version` and an `environment`. If not provided, your account default is used. These can also be supplied using the environment variables `CRONITOR_API_KEY`, `CRONITOR_API_VERSION`, `CRONITOR_ENVIRONMENT`.
 
-Telemetry pings, exceptions and logs are sent to `https://cronitor.link` by default. Set `cronitor.ingest_url` or `CRONITOR_INGEST_URL` to send them elsewhere, for example `http://localhost:9100` in development. `cronitor.release` (`CRONITOR_RELEASE`) is attached to exceptions and logs.
+Telemetry pings, exceptions and logs are sent to `https://cronitor.link` by default. Set `cronitor.ingest_url` or `CRONITOR_INGEST_URL` to send them elsewhere, for example `http://localhost:9100` in development. `cronitor.release` (`CRONITOR_RELEASE`) is attached to exceptions and logs. `cronitor.app` (`CRONITOR_APP`) names the app monitor that exceptions and logs belong to; a `cronitor.app` tag or attribute on a single call overrides it.
 
 ```python
 import cronitor
