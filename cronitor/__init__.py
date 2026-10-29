@@ -12,9 +12,11 @@ import threading
 from .monitor import Monitor, YAML
 from . import ingest
 from .ingest import flush
+from .capture import capture_exception, capture_message, logger
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+# the package's own diagnostics; `cronitor.logger` ships structured logs to Cronitor
+_logger = logging.getLogger(__name__)
+_logger.setLevel(logging.INFO)
 
 # configuration variables
 api_key = os.getenv('CRONITOR_API_KEY', None)
@@ -27,6 +29,10 @@ if timeout is not None:
 
 # base URL for telemetry pings and exception/log envelopes, e.g. http://localhost:9100 in development
 ingest_url = os.getenv('CRONITOR_INGEST_URL') or ingest.DEFAULT_INGEST_URL
+# attached to exception events and logs
+release = os.getenv('CRONITOR_RELEASE', None)
+# send an exception event when a function decorated with @cronitor.job raises
+capture_exceptions = True
 
 celerybeat_only = False
 
@@ -108,10 +114,10 @@ def apply_config(rollback=False):
         check_count = len(monitors.get('checks', []))
         heartbeat_count = len(monitors.get('heartbeats', []))
         total_count = sum([job_count, check_count, heartbeat_count])
-        logger.info('{} monitor{} {}'.format(total_count, 's' if total_count != 1 else '', 'validated.' if rollback else 'synced.',))
+        _logger.info('{} monitor{} {}'.format(total_count, 's' if total_count != 1 else '', 'validated.' if rollback else 'synced.',))
         return True
     except (yaml.YAMLError, ConfigValidationError, APIValidationError, APIError, AuthenticationError) as e:
-        logger.error(e)
+        _logger.error(e)
         return False
 
 def read_config(path=None, output=False):
