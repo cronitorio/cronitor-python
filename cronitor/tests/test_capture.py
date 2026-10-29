@@ -4,6 +4,7 @@ import re
 import socket
 import time
 import unittest
+from unittest.mock import patch
 
 import cronitor
 from cronitor import ingest
@@ -403,3 +404,107 @@ class LoggerTests(CaptureTestCase):
         self.flushed_logs()
         self.assertEqual(len(self.send.calls), 1)
         self.assertEqual(self.send.items('log')[0][0]['item_count'], 3)
+
+
+@cronitor.job('capture-job-test')
+def _successful_job():
+    return 'done'
+
+
+@cronitor.job('capture-job-test')
+def _failing_job():
+    raise ValueError('job exploded')
+
+
+@cronitor.job('capture-job-test', env='staging')
+def _job_that_reports():
+    cronitor.capture_message('inside the job')
+    cronitor.logger.info('log inside the job')
+    try:
+        raise KeyError('handled inside')
+    except KeyError as e:
+        cronitor.capture_exception(e)
+    cronitor.capture_message('other monitor', monitor='someone-else')
+    return 'ok'
+
+
+class JobTests(CaptureTestCase):
+
+    def setUp(self):
+        super().setUp()
+        patcher = patch('cronitor.Monitor.ping')
+        self.ping = patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def _ping_calls(self, state):
+        return [c for c in self.ping.call_args_list if c.kwargs.get('state') == state]
+
+    def test_success_sends_no_event(self):
+        self.assertEqual(_successful_job(), 'done')
+        self.assertEqual(len(self._ping_calls('complete')), 1)
+        self.assertEqual(self.flushed_events(), [])
+
+    def test_failure_sends_fail_ping_then_unhandled_event_with_same_series(self):
+        order = []
+        self.ping.side_effect = lambda **params: order.append('ping:' + params['state'])
+        real_submit = ingest.submit_event
+
+        def submit(event, api_key=None):
+            order.append('event')
+            return real_submit(event, api_key=api_key)
+
+        with patch('cronitor.ingest.submit_event', side_effect=submit):
+            with self.assertRaises(ValueError):
+                _failing_job()
+
+        self.assertEqual(order, ['ping:run', 'ping:fail', 'event'])
+        fail = self._ping_calls('fail')[0]
+        series = fail.kwargs['series']
+        self.assertEqual(self._ping_calls('run')[0].kwargs['series'], series)
+
+        event = self.only_event()
+        self.assertEqual(event['level'], 'error')
+        self.assertEqual(event['tags'], {'cronitor.monitor': 'capture-job-test', 'cronitor.series': str(series)})
+        values = event['exception']['values']
+        self.assertEqual(len(values), 1)
+        self.assertEqual(values[0]['type'], 'ValueError')
+        self.assertEqual(values[0]['value'], 'job exploded')
+        self.assertEqual(values[0]['mechanism'], {'type': 'cronitor.job', 'handled': False})
+        self.assertEqual(values[0]['stacktrace']['frames'][-1]['function'], '_failing_job')
+
+    def test_capture_exceptions_false_sends_no_event(self):
+        cronitor.capture_exceptions = False
+        with self.assertRaises(ValueError):
+            _failing_job()
+        self.assertEqual(len(self._ping_calls('fail')), 1)
+        self.assertEqual(self.flushed_events(), [])
+
+    def test_captures_inside_a_job_bind_to_the_run(self):
+        cronitor.environment = 'production'
+        self.assertEqual(_job_that_reports(), 'ok')
+        series = str(self._ping_calls('run')[0].kwargs['series'])
+        bound = {'cronitor.monitor': 'capture-job-test', 'cronitor.series': series}
+
+        events = self.flushed_events()
+        self.assertEqual(len(events), 3)
+        message, handled, other = events
+        self.assertEqual(message['tags'], bound)
+        self.assertEqual(message['environment'], 'staging')
+        self.assertEqual(handled['tags'], bound)
+        self.assertEqual(handled['exception']['values'][0]['mechanism'], {'type': 'generic', 'handled': True})
+        # an explicit other monitor is not bound to this run or its environment
+        self.assertEqual(other['tags'], {'cronitor.monitor': 'someone-else'})
+        self.assertEqual(other['environment'], 'production')
+
+        record = self.send.log_records()[0]
+        self.assertEqual(_attr(record, 'cronitor.monitor')['value'], 'capture-job-test')
+        self.assertEqual(_attr(record, 'cronitor.series')['value'], series)
+        self.assertEqual(_attr(record, 'sentry.environment')['value'], 'staging')
+
+    def test_binding_ends_with_the_job(self):
+        _successful_job()
+        with self.assertRaises(ValueError):
+            _failing_job()
+        self.assertIsNone(cronitor.capture.current_job())
+        cronitor.capture_message('after the job')
+        self.assertEqual(self.flushed_events()[-1]['tags'], {})

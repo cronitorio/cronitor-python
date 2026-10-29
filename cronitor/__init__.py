@@ -10,7 +10,7 @@ import atexit
 import threading
 
 from .monitor import Monitor, YAML
-from . import ingest
+from . import capture, ingest
 from .ingest import flush
 from .capture import capture_exception, capture_message, logger
 
@@ -80,12 +80,20 @@ def job(key, env=None, log_output=True, include_output=True, attributes=None):
             monitor = Monitor(key, env=env)
             # use start as the series param to match run/fail/complete correctly
             monitor.ping(state=State.RUN, series=start)
+            # exceptions and logs captured while the function runs are bound to this run
+            job_env = env or this.environment
+            token = capture.bind_job(key, start, job_env)
             try:
                 out = func(*args, **kwargs)
             except Exception as e:
                 duration = datetime.now().timestamp() - start
                 monitor.ping(state=State.FAIL, message=str(e), metrics={'duration': duration}, series=start)
+                if this.capture_exceptions:
+                    capture._capture_exception(e, monitor=key, series=start, env=job_env,
+                                               mechanism='cronitor.job', handled=False)
                 raise e
+            finally:
+                capture.unbind_job(token)
 
             duration = datetime.now().timestamp() - start
             message = str(out) if all([log_output, include_output]) else None
