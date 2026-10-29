@@ -416,6 +416,65 @@ def _typed(value):
     return {'value': _truncate(value, MAX_ATTRIBUTE_VALUE_LENGTH), 'type': 'string'}
 
 
+# logging integration
+
+_LOGGING_LEVELS = (
+    (logging.CRITICAL, 'fatal'),
+    (logging.ERROR, 'error'),
+    (logging.WARNING, 'warn'),
+    (logging.INFO, 'info'),
+    (logging.DEBUG, 'debug'),
+)
+# records about sending must not be sent, or a failing transport would feed itself
+_INTERNAL_LOGGERS = ('cronitor.ingest', 'cronitor.capture')
+
+
+def _log_level(levelno):
+    for threshold, name in _LOGGING_LEVELS:
+        if levelno >= threshold:
+            return name
+    return 'trace'
+
+
+class LogHandler(logging.Handler):
+    """A logging.Handler that ships records to Cronitor as structured logs.
+
+    Records are batched by the background transport. A record with exc_info
+    carries the formatted traceback in the ``exception.stacktrace`` attribute;
+    no separate exception event is sent.
+    """
+
+    def __init__(self, level=logging.NOTSET):
+        super(LogHandler, self).__init__(level)
+
+    def emit(self, record):
+        if ingest.in_worker_thread() or record.name.startswith(_INTERNAL_LOGGERS):
+            return
+        try:
+            attrs = {
+                'logger.name': record.name,
+                'code.file.path': record.pathname,
+                'code.line.number': record.lineno,
+                'code.function.name': record.funcName,
+            }
+            if record.args and isinstance(record.msg, str):
+                attrs['sentry.message.template'] = record.msg
+                params = record.args.items() if isinstance(record.args, dict) else enumerate(record.args)
+                for key, value in params:
+                    attrs['sentry.message.parameter.{}'.format(key)] = value
+            if record.exc_info and record.exc_info[0] is not None:
+                exc_type, exc_value, tb = record.exc_info
+                stacktrace = ''.join(traceback.format_exception(exc_type, exc_value, tb))
+                attrs['exception.type'] = getattr(exc_type, '__name__', _safe_str(exc_type))
+                attrs['exception.message'] = _safe_str(exc_value)
+                # keep the end, where the crash site and the message are
+                attrs['exception.stacktrace'] = stacktrace[-MAX_ATTRIBUTE_VALUE_LENGTH:]
+            log = _log_record(_log_level(record.levelno), record.getMessage(), attrs, timestamp=record.created)
+            ingest.submit_log(log)
+        except Exception:
+            self.handleError(record)
+
+
 # helpers
 
 def _hostname():

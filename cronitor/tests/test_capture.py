@@ -1,7 +1,9 @@
 import json
+import logging
 import os
 import re
 import socket
+import sys
 import time
 import unittest
 from unittest.mock import patch
@@ -508,3 +510,116 @@ class JobTests(CaptureTestCase):
         self.assertIsNone(cronitor.capture.current_job())
         cronitor.capture_message('after the job')
         self.assertEqual(self.flushed_events()[-1]['tags'], {})
+
+
+class LogHandlerTests(CaptureTestCase):
+
+    def setUp(self):
+        super().setUp()
+        self.log = logging.getLogger('cronitor.tests.handler')
+        self.log.propagate = False
+        self.log.setLevel(1)
+        self.handler = cronitor.LogHandler()
+        self.log.addHandler(self.handler)
+        self.addCleanup(self.log.removeHandler, self.handler)
+
+    def test_level_mapping(self):
+        self.log.log(5, 'below debug')
+        self.log.debug('debug line')
+        self.log.info('info line')
+        self.log.warning('warning line')
+        self.log.error('error line')
+        self.log.critical('critical line')
+        records = self.flushed_logs()
+        self.assertEqual([r['level'] for r in records], ['trace', 'debug', 'info', 'warn', 'error', 'fatal'])
+        self.assertEqual([_attr(r, 'sentry.severity_number')['value'] for r in records], [1, 5, 9, 13, 17, 21])
+        self.assertEqual(len(self.send.calls), 1)
+
+    def test_record_attributes(self):
+        before = time.time()
+        self.log.info('user %s did %d things', 'bob', 3); line = sys._getframe().f_lineno
+        record = self.flushed_logs()[0]
+        self.assertEqual(record['body'], 'user bob did 3 things')
+        self.assertGreaterEqual(record['timestamp'], before)
+        self.assertEqual(_attr(record, 'logger.name'), {'value': 'cronitor.tests.handler', 'type': 'string'})
+        self.assertEqual(_attr(record, 'code.file.path')['value'], __file__)
+        self.assertEqual(_attr(record, 'code.line.number'), {'value': line, 'type': 'integer'})
+        self.assertEqual(_attr(record, 'code.function.name')['value'], 'test_record_attributes')
+        self.assertEqual(_attr(record, 'sentry.message.template')['value'], 'user %s did %d things')
+        self.assertEqual(_attr(record, 'sentry.message.parameter.0'), {'value': 'bob', 'type': 'string'})
+        self.assertEqual(_attr(record, 'sentry.message.parameter.1'), {'value': 3, 'type': 'integer'})
+        self.assertEqual(_attr(record, 'sentry.sdk.name')['value'], 'cronitor-python')
+        self.assertEqual(_attr(record, 'server.address')['value'], socket.gethostname())
+
+    def test_mapping_args(self):
+        self.log.info('%(user)s logged in', {'user': 'bob'})
+        record = self.flushed_logs()[0]
+        self.assertEqual(record['body'], 'bob logged in')
+        self.assertEqual(_attr(record, 'sentry.message.parameter.user')['value'], 'bob')
+
+    def test_no_args_records_no_template(self):
+        self.log.info('100% plain')
+        record = self.flushed_logs()[0]
+        self.assertEqual(record['body'], '100% plain')
+        self.assertNotIn('sentry.message.template', record['attributes'])
+
+    def test_exc_info_adds_stacktrace_and_sends_no_event(self):
+        try:
+            raise ValueError('bad input')
+        except ValueError:
+            self.log.exception('import failed')
+        records = self.flushed_logs()
+        self.assertEqual(self.send.events(), [])
+        record = records[0]
+        self.assertEqual(record['level'], 'error')
+        self.assertEqual(record['body'], 'import failed')
+        stacktrace = _attr(record, 'exception.stacktrace')['value']
+        self.assertTrue(stacktrace.startswith('Traceback (most recent call last):'))
+        self.assertIn("raise ValueError('bad input')", stacktrace)
+        self.assertTrue(stacktrace.rstrip().endswith('ValueError: bad input'))
+        self.assertEqual(_attr(record, 'exception.type')['value'], 'ValueError')
+        self.assertEqual(_attr(record, 'exception.message')['value'], 'bad input')
+
+    def test_long_stacktrace_keeps_the_end(self):
+        try:
+            raise ValueError('x' * 9000 + ' the end')
+        except ValueError:
+            self.log.exception('failed')
+        stacktrace = _attr(self.flushed_logs()[0], 'exception.stacktrace')['value']
+        self.assertEqual(len(stacktrace), 8000)
+        self.assertTrue(stacktrace.rstrip().endswith('the end'))
+
+    def test_handler_level(self):
+        self.handler.setLevel(logging.WARNING)
+        self.log.info('dropped')
+        self.log.warning('kept')
+        self.assertEqual([r['body'] for r in self.flushed_logs()], ['kept'])
+
+    def test_handler_level_argument(self):
+        self.assertEqual(cronitor.LogHandler(logging.ERROR).level, logging.ERROR)
+        self.assertEqual(cronitor.LogHandler().level, logging.NOTSET)
+
+    def test_records_inside_a_job_are_bound(self):
+        @cronitor.job('handler-job')
+        def job():
+            self.log.info('working')
+
+        with patch('cronitor.Monitor.ping') as ping:
+            job()
+        series = str(ping.call_args_list[0].kwargs['series'])
+        record = self.flushed_logs()[0]
+        self.assertEqual(_attr(record, 'cronitor.monitor')['value'], 'handler-job')
+        self.assertEqual(_attr(record, 'cronitor.series')['value'], series)
+
+    def test_ignores_the_transports_own_records(self):
+        root = logging.getLogger()
+        root.addHandler(self.handler)
+        self.addCleanup(root.removeHandler, self.handler)
+        logging.getLogger('cronitor.ingest').warning('send failed')
+        ingest._worker_state.active = True
+        try:
+            logging.getLogger('urllib3.connectionpool').warning('retrying')
+        finally:
+            ingest._worker_state.active = False
+        self.log.info('kept')
+        self.assertEqual([r['body'] for r in self.flushed_logs()], ['kept'])

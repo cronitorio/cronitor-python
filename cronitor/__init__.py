@@ -12,7 +12,7 @@ import threading
 from .monitor import Monitor, YAML
 from . import capture, ingest
 from .ingest import flush
-from .capture import capture_exception, capture_message, logger
+from .capture import capture_exception, capture_message, logger, LogHandler
 
 # the package's own diagnostics; `cronitor.logger` ships structured logs to Cronitor
 _logger = logging.getLogger(__name__)
