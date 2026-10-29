@@ -67,6 +67,15 @@ class State(object):
     COMPLETE = 'complete'
     FAIL = 'fail'
 
+def _safe_ping(monitor, **params):
+    """Pings are best effort: a telemetry outage must never stop or fail the job."""
+    try:
+        return monitor.ping(**params)
+    except Exception as e:  # noqa: BLE001 - any transport error is swallowed on purpose
+        _logger.warning('Cronitor could not send the %s ping for %s: %s', params.get('state'), monitor.key, e)
+        return None
+
+
 # include_output is deprecated in favor of log_output and can be removed in 5.0 release
 def job(key, env=None, log_output=True, include_output=True, attributes=None):
 
@@ -81,7 +90,7 @@ def job(key, env=None, log_output=True, include_output=True, attributes=None):
 
             monitor = Monitor(key, env=env)
             # use start as the series param to match run/fail/complete correctly
-            monitor.ping(state=State.RUN, series=start)
+            _safe_ping(monitor, state=State.RUN, series=start)
             # exceptions and logs captured while the function runs are bound to this run
             job_env = env or this.environment
             token = capture.bind_job(key, start, job_env)
@@ -89,7 +98,7 @@ def job(key, env=None, log_output=True, include_output=True, attributes=None):
                 out = func(*args, **kwargs)
             except Exception as e:
                 duration = datetime.now().timestamp() - start
-                monitor.ping(state=State.FAIL, message=str(e), metrics={'duration': duration}, series=start)
+                _safe_ping(monitor, state=State.FAIL, message=str(e), metrics={'duration': duration}, series=start)
                 if this.capture_exceptions:
                     capture._capture_exception(e, monitor=key, series=start, env=job_env,
                                                mechanism='cronitor.job', handled=False)
@@ -99,7 +108,7 @@ def job(key, env=None, log_output=True, include_output=True, attributes=None):
 
             duration = datetime.now().timestamp() - start
             message = str(out) if all([log_output, include_output]) else None
-            monitor.ping(state=State.COMPLETE, message=message, metrics={'duration': duration}, series=start)
+            _safe_ping(monitor, state=State.COMPLETE, message=message, metrics={'duration': duration}, series=start)
             return out
 
         return wrapped

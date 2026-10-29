@@ -187,11 +187,11 @@ Cronitor accepts the Sentry wire format, so `sentry_sdk` works by changing the D
 ```python
 import sentry_sdk
 
-sentry_sdk.init(dsn='https://{telemetry_key}@cronitor.link/{key_id}')
+sentry_sdk.init(dsn='https://{telemetry_key}@cronitor.link/{service_monitor_id}')
 sentry_sdk.set_tag('cronitor.monitor', 'nightly-job')
 ```
 
-`telemetry_key` is a Cronitor API key with telemetry scope and `key_id` is that key's numeric id.
+The DSN is the `dsn` field of a service monitor: create one with the Monitors API (`type: "service"`) or `Monitor.put(key='billing-api', type='service')` and read `monitor.data.dsn`. Its path is the monitor's numeric id.
 
 ## Configuring Monitors
 
@@ -210,7 +210,7 @@ cronitor.read_config('./cronitor.yaml') # parse the yaml file of monitors
 
 cronitor.validate_config() # send monitors to Cronitor for configuration validation
 
-cronitor.servicely_config() # sync the monitors from the config file to Cronitor
+cronitor.apply_config() # sync the monitors from the config file to Cronitor
 
 cronitor.generate_config() # generate a new config file from the Cronitor API
 ```
@@ -221,7 +221,7 @@ The timeout value for validate_config, apply_config and generate_config is 10 se
 import cronitor
 
 cronitor.timeout = 30
-cronitor.servicely_config()
+cronitor.apply_config()
 ```
 
 The `cronitor.yaml` file includes three top level keys `jobs`, `checks`, `heartbeats`. You can configure monitors under each key by defining [monitors](https://cronitor.io/docs/monitor-api#attributes).

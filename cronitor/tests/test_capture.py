@@ -6,6 +6,8 @@ import socket
 import sys
 import time
 import unittest
+
+import requests
 from unittest.mock import patch
 
 import cronitor
@@ -462,6 +464,19 @@ class JobTests(CaptureTestCase):
 
     def test_success_sends_no_event(self):
         self.assertEqual(_successful_job(), 'done')
+
+    def test_ping_failures_never_reach_the_job(self):
+        # A telemetry outage must not stop the job: pings are best effort.
+        self.ping.side_effect = requests.ConnectionError('telemetry host down')
+        self.assertEqual(_successful_job(), 'done')
+        self.assertEqual(len(self._ping_calls('run')), 1)
+        self.assertEqual(len(self._ping_calls('complete')), 1)
+
+    def test_ping_failure_still_captures_the_exception(self):
+        self.ping.side_effect = requests.ConnectionError('telemetry host down')
+        with self.assertRaises(KeyError):
+            _failing_job()
+        self.assertEqual(self.only_event()['exception']['values'][-1]['type'], 'KeyError')
         self.assertEqual(len(self._ping_calls('complete')), 1)
         self.assertEqual(self.flushed_events(), [])
 
