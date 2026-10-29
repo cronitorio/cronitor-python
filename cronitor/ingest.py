@@ -247,6 +247,11 @@ class Transport(object):
             if self._pid != pid or self._queue is None:
                 # first use, or a forked child: items queued by the parent are not ours to send
                 self._queue = queue.Queue(maxsize=self._maxsize)
+            if self._pid != pid:
+                # nor is its keep-alive session: the sockets are shared with the parent, and a
+                # connection pool lock held by a parent thread at fork time is never released
+                self._session = None
+                self._rate_limited_until = 0.0
             thread = threading.Thread(target=self._run, args=(self._queue,), name='cronitor-ingest')
             thread.daemon = True
             thread.start()

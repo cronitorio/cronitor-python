@@ -5,6 +5,7 @@ import re
 import subprocess
 import sys
 import threading
+import time
 import unittest
 from unittest.mock import patch
 
@@ -313,6 +314,23 @@ class TransportTests(unittest.TestCase):
             self.assertTrue(self.transport.flush(2.0))
             self.assertIsNot(self.transport._thread, first_thread)
         self.assertEqual(len(self.send.calls), 2)
+
+    def test_forked_child_does_not_reuse_the_parents_session(self):
+        # the parent's keep-alive session shares its TLS sockets and pool locks with the child
+        self.transport.submit_event(_event('1' * 32))
+        self.transport.flush(2.0)
+        first_thread, first_queue = self.transport._thread, self.transport._queue
+        parent_session = object()
+        self.transport._session = parent_session
+        self.transport._rate_limited_until = time.monotonic() + 30
+        self.transport._pid = os.getpid() + 100000  # as if the worker were started by a parent process
+        self.transport._ensure_worker()
+        self.assertIsNone(self.transport._session)
+        self.assertEqual(self.transport._rate_limited_until, 0.0)
+        self.assertIsNot(self.transport._queue, first_queue)
+        self.assertIsNot(self.transport._thread, first_thread)
+        self.assertTrue(self.transport._thread.is_alive())
+        self.assertEqual(self.transport._pid, os.getpid())
 
 
 class ModuleTransportTests(unittest.TestCase):
