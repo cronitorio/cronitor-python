@@ -178,7 +178,7 @@ logging.getLogger().addHandler(cronitor.LogHandler(level=logging.INFO))
 
 Logs are batched (100 records or 5 seconds). Queued events and logs are flushed when the process exits; call `cronitor.flush(timeout=2.0)` to flush earlier, for example at the end of a serverless handler.
 
-> In 5.0 `cronitor.logger` became this log shipper. The package's own diagnostics still use `logging.getLogger('cronitor')`.
+> In 5.0 `cronitor.logger` became this log shipper. Calls written for the stdlib logger it used to be keep working: %-style arguments (`cronitor.logger.info('Synced %s rows', 120)`), `warn`, `critical`, `exception` (an error log with the exception being handled: `exception.type`, `exception.message` and `exception.stacktrace`) and `log(level, ...)` with a stdlib level number or name. Configuration calls such as `setLevel` still reach `logging.getLogger('cronitor')`, which the package's own diagnostics use.
 
 #### Already using the Sentry SDK?
 

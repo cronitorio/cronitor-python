@@ -16,6 +16,7 @@ import time
 import traceback
 import uuid
 from collections import namedtuple
+from collections.abc import Mapping
 
 import cronitor
 from . import ingest
@@ -83,28 +84,42 @@ class Logger(object):
 
     ``cronitor.logger.info('processed {count} rows', count=5)`` formats the body
     with ``str.format`` and records the template and parameters as attributes.
+
+    Before 5.0 ``cronitor.logger`` was ``logging.getLogger('cronitor')``, so calls
+    written for it keep working: %-style arguments (``info('x %s', 1)``), ``warn``,
+    ``critical``, ``exception`` and ``log(level, ...)``.
     """
 
-    def trace(self, body, **attributes):
-        _capture_log('trace', body, attributes)
+    def trace(self, body, *args, **attributes):
+        _capture_log('trace', body, attributes, args=args)
 
-    def debug(self, body, **attributes):
-        _capture_log('debug', body, attributes)
+    def debug(self, body, *args, **attributes):
+        _capture_log('debug', body, attributes, args=args)
 
-    def info(self, body, **attributes):
-        _capture_log('info', body, attributes)
+    def info(self, body, *args, **attributes):
+        _capture_log('info', body, attributes, args=args)
 
-    def warning(self, body, **attributes):
-        _capture_log('warn', body, attributes)
+    def warning(self, body, *args, **attributes):
+        _capture_log('warn', body, attributes, args=args)
 
-    def error(self, body, **attributes):
-        _capture_log('error', body, attributes)
+    def error(self, body, *args, **attributes):
+        _capture_log('error', body, attributes, args=args)
 
-    def fatal(self, body, **attributes):
-        _capture_log('fatal', body, attributes)
+    def fatal(self, body, *args, **attributes):
+        _capture_log('fatal', body, attributes, args=args)
 
-    # Before 5.0 `cronitor.logger` was logging.getLogger('cronitor'). Keep its
-    # configuration methods working so existing setup code does not break.
+    warn = warning
+    critical = fatal
+
+    def exception(self, body, *args, **attributes):
+        """An error log carrying the exception being handled, like ``logging.Logger.exception``."""
+        _capture_log('error', body, attributes, args=args, exc_info=sys.exc_info())
+
+    def log(self, level, body, *args, **attributes):
+        """Log at a stdlib level number (``logging.INFO``) or a level name (``'info'``, ``'WARNING'``)."""
+        _capture_log(level, body, attributes, args=args)
+
+    # Keep the stdlib logger's configuration methods working so existing setup code does not break.
     _STDLIB_CONFIG = frozenset(['setLevel', 'getEffectiveLevel', 'isEnabledFor', 'addHandler',
                                 'removeHandler', 'hasHandlers', 'addFilter', 'removeFilter',
                                 'handlers', 'filters', 'level', 'name', 'propagate', 'disabled'])
@@ -348,14 +363,18 @@ def _in_app(abs_path):
 
 # logs
 
-def _capture_log(level, body, attributes, extra_attributes=None, timestamp=None):
+def _capture_log(level, body, attributes, args=(), exc_info=None, extra_attributes=None, timestamp=None):
     try:
+        level = _level_name(level)
         template = _safe_str(body)
         params = dict(attributes)
         plain = params.pop('attributes') if isinstance(params.get('attributes'), dict) else {}
         attrs = {}
         text = template
-        if params and '{' in template:
+        if args:
+            text, attrs = _percent_format(template, args)
+            attrs.update(params)
+        elif params and '{' in template:
             try:
                 text = template.format(**params)
                 attrs['sentry.message.template'] = template
@@ -367,6 +386,8 @@ def _capture_log(level, body, attributes, extra_attributes=None, timestamp=None)
         else:
             attrs.update(params)
         attrs.update(plain)
+        if exc_info is not None and exc_info[0] is not None:
+            attrs.update(_exception_attributes(*exc_info))
         if extra_attributes:
             attrs.update(extra_attributes)
         record = _log_record(level, text, attrs, timestamp)
@@ -374,6 +395,49 @@ def _capture_log(level, body, attributes, extra_attributes=None, timestamp=None)
     except Exception as e:
         _log.warning('Cronitor could not capture a log record: %s', e)
         return False
+
+
+def _percent_format(template, args):
+    """Format like the stdlib's LogRecord.getMessage(), keeping the template on error.
+
+    Returns (text, attributes): the parameters, and the template when it formatted.
+    """
+    if len(args) == 1 and isinstance(args[0], Mapping) and args[0]:
+        args = args[0]
+    params = args.items() if isinstance(args, Mapping) else enumerate(args)
+    attrs = {'sentry.message.parameter.{}'.format(key): value for key, value in params}
+    try:
+        text = template % args
+    except Exception:
+        return template, attrs
+    attrs['sentry.message.template'] = template
+    return text, attrs
+
+
+def _exception_attributes(exc_type, exc_value, tb):
+    stacktrace = ''.join(traceback.format_exception(exc_type, exc_value, tb))
+    return {
+        'exception.type': getattr(exc_type, '__name__', _safe_str(exc_type)),
+        'exception.message': _safe_str(exc_value),
+        # keep the end, where the crash site and the message are
+        'exception.stacktrace': stacktrace[-MAX_ATTRIBUTE_VALUE_LENGTH:],
+    }
+
+
+_LOG_LEVEL_NAMES = {'trace': 'trace', 'debug': 'debug', 'info': 'info', 'warn': 'warn', 'warning': 'warn',
+                    'error': 'error', 'fatal': 'fatal', 'critical': 'fatal'}
+
+
+def _level_name(level):
+    """A log level from a name (``'info'``, ``'WARNING'``) or a stdlib level number (``logging.INFO``)."""
+    if isinstance(level, int):
+        return _log_level(level)
+    name = _safe_str(level).lower()
+    if name in _LOG_LEVEL_NAMES:
+        return _LOG_LEVEL_NAMES[name]
+    # a custom level registered with logging.addLevelName
+    number = logging.getLevelName(name.upper())
+    return _log_level(number) if isinstance(number, int) else 'info'
 
 
 def _log_record(level, body, attributes, timestamp=None):
@@ -471,12 +535,7 @@ class LogHandler(logging.Handler):
                 for key, value in params:
                     attrs['sentry.message.parameter.{}'.format(key)] = value
             if record.exc_info and record.exc_info[0] is not None:
-                exc_type, exc_value, tb = record.exc_info
-                stacktrace = ''.join(traceback.format_exception(exc_type, exc_value, tb))
-                attrs['exception.type'] = getattr(exc_type, '__name__', _safe_str(exc_type))
-                attrs['exception.message'] = _safe_str(exc_value)
-                # keep the end, where the crash site and the message are
-                attrs['exception.stacktrace'] = stacktrace[-MAX_ATTRIBUTE_VALUE_LENGTH:]
+                attrs.update(_exception_attributes(*record.exc_info))
             log = _log_record(_log_level(record.levelno), record.getMessage(), attrs, timestamp=record.created)
             ingest.submit_log(log)
         except Exception:

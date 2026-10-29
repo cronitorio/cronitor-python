@@ -419,7 +419,86 @@ class LoggerTests(CaptureTestCase):
         finally:
             stdlib.setLevel(level)
         with self.assertRaises(AttributeError):
-            cronitor.logger.exception
+            cronitor.logger.no_such_method
+
+
+class StdlibLoggerCompatibilityTests(CaptureTestCase):
+    """Calls written for logging.getLogger('cronitor'), which cronitor.logger was before 5.0."""
+
+    def test_percent_args_are_formatted(self):
+        cronitor.logger.info('x %s', 1)
+        cronitor.logger.info('user %s did %d things', 'bob', 3)
+        first, second = self.flushed_logs()
+        self.assertEqual(first['body'], 'x 1')
+        self.assertEqual(second['body'], 'user bob did 3 things')
+        self.assertEqual(_attr(second, 'sentry.message.template')['value'], 'user %s did %d things')
+        self.assertEqual(_attr(second, 'sentry.message.parameter.0'), {'value': 'bob', 'type': 'string'})
+        self.assertEqual(_attr(second, 'sentry.message.parameter.1'), {'value': 3, 'type': 'integer'})
+
+    def test_mapping_arg_and_attributes(self):
+        cronitor.logger.info('%(user)s logged in', {'user': 'bob'}, team='core')
+        record = self.flushed_logs()[0]
+        self.assertEqual(record['body'], 'bob logged in')
+        self.assertEqual(_attr(record, 'sentry.message.parameter.user')['value'], 'bob')
+        self.assertEqual(_attr(record, 'team')['value'], 'core')
+
+    def test_bad_format_keeps_the_body_and_never_raises(self):
+        class Unprintable(object):
+            def __str__(self):
+                raise RuntimeError('no str')
+
+        cronitor.logger.info('two %s %s', 1)
+        cronitor.logger.info('number %d', 'not a number')
+        cronitor.logger.info('object %s', Unprintable())
+        self.assertEqual([r['body'] for r in self.flushed_logs()],
+                         ['two %s %s', 'number %d', 'object %s'])
+
+    def test_warn_and_critical_aliases(self):
+        cronitor.logger.warn('careful %s', 'now')
+        cronitor.logger.critical('down')
+        warn, critical = self.flushed_logs()
+        self.assertEqual((warn['level'], warn['body']), ('warn', 'careful now'))
+        self.assertEqual(critical['level'], 'fatal')
+
+    def test_exception_adds_the_handled_exception(self):
+        try:
+            raise ValueError('bad input')
+        except ValueError:
+            cronitor.logger.exception('import %s failed', 'orders', batch=4)
+        record = self.flushed_logs()[0]
+        self.assertEqual(self.send.events(), [])
+        self.assertEqual((record['level'], record['body']), ('error', 'import orders failed'))
+        self.assertEqual(_attr(record, 'exception.type')['value'], 'ValueError')
+        self.assertEqual(_attr(record, 'exception.message')['value'], 'bad input')
+        stacktrace = _attr(record, 'exception.stacktrace')['value']
+        self.assertTrue(stacktrace.startswith('Traceback (most recent call last):'))
+        self.assertTrue(stacktrace.rstrip().endswith('ValueError: bad input'))
+        self.assertEqual(_attr(record, 'batch')['value'], 4)
+
+    def test_exception_outside_an_except_block_is_an_error_log(self):
+        cronitor.logger.exception('nothing raised')
+        record = self.flushed_logs()[0]
+        self.assertEqual(record['level'], 'error')
+        self.assertNotIn('exception.type', record['attributes'])
+
+    def test_log_with_stdlib_levels_and_names(self):
+        cronitor.logger.log(logging.WARNING, 'w %s', 1)
+        cronitor.logger.log(logging.CRITICAL, 'c')
+        cronitor.logger.log(5, 'below debug')
+        cronitor.logger.log('ERROR', 'e')
+        cronitor.logger.log('warning', 'w')
+        cronitor.logger.log('critical', 'c')
+        cronitor.logger.log('trace', 't')
+        cronitor.logger.log('no such level', 'unknown')
+        records = self.flushed_logs()
+        self.assertEqual([r['level'] for r in records],
+                         ['warn', 'fatal', 'trace', 'error', 'warn', 'fatal', 'trace', 'info'])
+        self.assertEqual(records[0]['body'], 'w 1')
+
+    def test_log_with_a_registered_custom_level(self):
+        logging.addLevelName(45, 'CRONITOR_TEST_SEVERE')
+        cronitor.logger.log('cronitor_test_severe', 'custom')
+        self.assertEqual(self.flushed_logs()[0]['level'], 'error')
 
     def test_logs_are_batched_into_one_envelope(self):
         for i in range(3):
