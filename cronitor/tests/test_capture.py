@@ -464,6 +464,8 @@ class JobTests(CaptureTestCase):
 
     def test_success_sends_no_event(self):
         self.assertEqual(_successful_job(), 'done')
+        self.assertEqual(len(self._ping_calls('complete')), 1)
+        self.assertEqual(self.flushed_events(), [])
 
     def test_ping_failures_never_reach_the_job(self):
         # A telemetry outage must not stop the job: pings are best effort.
@@ -474,11 +476,9 @@ class JobTests(CaptureTestCase):
 
     def test_ping_failure_still_captures_the_exception(self):
         self.ping.side_effect = requests.ConnectionError('telemetry host down')
-        with self.assertRaises(KeyError):
+        with self.assertRaises(ValueError):
             _failing_job()
-        self.assertEqual(self.only_event()['exception']['values'][-1]['type'], 'KeyError')
-        self.assertEqual(len(self._ping_calls('complete')), 1)
-        self.assertEqual(self.flushed_events(), [])
+        self.assertEqual(self.only_event()['exception']['values'][-1]['type'], 'ValueError')
 
     def test_failure_sends_fail_ping_then_unhandled_event_with_same_series(self):
         order = []
