@@ -181,6 +181,21 @@ class TransportTests(unittest.TestCase):
         self.transport.flush(1.0)
         self.assertEqual(self.send.calls, [])
 
+    def test_missing_api_key_is_reported_once(self):
+        cronitor.api_key = None
+        with self.assertLogs('cronitor.ingest', 'ERROR') as logs:
+            for _ in range(3):
+                self.transport.submit_log(_record('no key'))
+        self.assertEqual(len(logs.output), 1)
+
+    def test_lone_surrogates_do_not_break_encoding(self):
+        self.transport.submit_event(_event(message={'formatted': 'bad \udcff byte'}))
+        self.transport.submit_log(_record('bad \udcff byte'))
+        self.transport.flush(2.0)
+        self.assertEqual(len(self.send.calls), 2)
+        self.assertEqual(self.send.events()[0]['message']['formatted'], 'bad ? byte')
+        self.assertEqual(self.send.log_records()[0]['body'], 'bad ? byte')
+
     def test_logs_batch_until_flush(self):
         for i in range(3):
             self.transport.submit_log(_record('line %d' % i))

@@ -9,6 +9,7 @@ import atexit
 import gzip
 import json
 import logging
+import math
 import os
 import queue
 import threading
@@ -90,8 +91,33 @@ def _json_default(value):
         return '<unrepresentable %s>' % type(value).__name__
 
 
+def _json_safe(value, depth=0):
+    """Copy of value with NaN/Infinity as strings and nesting (and so cycles) cut at 10 levels."""
+    if isinstance(value, float) and not math.isfinite(value):
+        return repr(value)
+    if isinstance(value, (dict, list, tuple)) and depth >= 10:
+        return _json_default(value)
+    if isinstance(value, dict):
+        return {k: _json_safe(v, depth + 1) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(v, depth + 1) for v in value]
+    return value
+
+
+def _dumps(obj, allow_nan):
+    return json.dumps(obj, default=_json_default, ensure_ascii=False, separators=(',', ':'),
+                      skipkeys=True, allow_nan=allow_nan)
+
+
 def json_bytes(obj):
-    return json.dumps(obj, default=_json_default, ensure_ascii=False, separators=(',', ':')).encode('utf-8')
+    """Strict JSON (no NaN or Infinity) as UTF-8. Values json cannot encode become their repr."""
+    try:
+        text = _dumps(obj, allow_nan=False)
+    except ValueError:
+        # a non-finite float or a circular reference somewhere in user data
+        text = _dumps(_json_safe(obj), allow_nan=False)
+    # 'replace' turns lone surrogates (undecodable bytes in paths or messages) into '?'
+    return text.encode('utf-8', 'replace')
 
 
 def serialize_envelope(headers, items):
@@ -159,6 +185,7 @@ class Transport(object):
         self._thread = None
         self._pid = None
         self._rate_limited_until = 0.0
+        self._reported_missing_key = False
         self.dropped = 0
 
     # caller side
@@ -191,7 +218,8 @@ class Transport(object):
 
     def _api_key(self, api_key):
         api_key = api_key or cronitor.api_key
-        if not api_key:
+        if not api_key and not self._reported_missing_key:
+            self._reported_missing_key = True
             logger.error('No API key detected. Set cronitor.api_key to send exceptions and logs.')
         return api_key
 

@@ -9,6 +9,10 @@ import threading
 import time
 
 
+def _reject_constant(name):
+    raise ValueError('not valid JSON: %s' % name)
+
+
 def parse_envelope(body, compressed=True):
     """Parse envelope bytes into (header, [(item_header, payload), ...]).
 
@@ -35,7 +39,7 @@ def parse_envelope(body, compressed=True):
         if rest[:1] != b'\n':
             raise AssertionError('payload is not followed by a newline')
         rest = rest[1:]
-        items.append((item_header, json.loads(payload.decode('utf-8'))))
+        items.append((item_header, json.loads(payload.decode('utf-8'), parse_constant=_reject_constant)))
     return header, items
 
 

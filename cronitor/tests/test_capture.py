@@ -266,6 +266,17 @@ class CaptureMessageTests(CaptureTestCase):
         self.assertEqual(event['extra']['rows'], [1, 2])
         self.assertTrue(event['extra']['obj'].startswith('<object object'))
 
+    def test_extra_with_non_finite_floats_and_cycles_is_valid_json(self):
+        circular = {'name': 'loop'}
+        circular['self'] = circular
+        cronitor.capture_message('hi', extra={'ratio': float('nan'), 'nested': {'limit': float('-inf')},
+                                              'circular': circular, 'pairs': {(1, 2): 'tuple key', 'ok': 1}})
+        extra = self.only_event()['extra']  # the strict reference parser rejects NaN
+        self.assertEqual(extra['ratio'], 'nan')
+        self.assertEqual(extra['nested'], {'limit': '-inf'})
+        self.assertEqual(extra['circular']['name'], 'loop')
+        self.assertEqual(extra['pairs'], {'ok': 1})
+
     def test_binding_tags_from_tags_dict(self):
         cronitor.capture_message('hi', tags={'cronitor.monitor': 'from-tags'})
         self.assertEqual(self.only_event()['tags'], {'cronitor.monitor': 'from-tags'})
@@ -357,6 +368,14 @@ class LoggerTests(CaptureTestCase):
         self.assertEqual(_attr(record, 'ok'), {'value': True, 'type': 'boolean'})
         self.assertEqual(_attr(record, 'ratio'), {'value': 0.5, 'type': 'double'})
         self.assertEqual(_attr(record, 'items'), {'value': '[1]', 'type': 'string'})
+
+    def test_non_finite_floats_are_sent_as_strings(self):
+        cronitor.logger.info('ratios', nan=float('nan'), inf=float('inf'))
+        self.assertTrue(cronitor.flush(2.0))
+        raw = self.send.calls[0].envelope  # strict JSON: the parser below rejects NaN
+        record = raw[1][0][1]['items'][0]
+        self.assertEqual(_attr(record, 'nan'), {'value': 'nan', 'type': 'string'})
+        self.assertEqual(_attr(record, 'inf'), {'value': 'inf', 'type': 'string'})
 
     def test_attributes_kwarg_like_sentry(self):
         cronitor.logger.warning('user {id} locked', id=7, attributes={'team': 'core'})

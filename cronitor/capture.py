@@ -7,6 +7,7 @@ on logs). Inside ``@cronitor.job`` both are filled in automatically.
 import contextvars
 import linecache
 import logging
+import math
 import os
 import socket
 import sys
@@ -409,7 +410,7 @@ def _typed(value):
         return {'value': value, 'type': 'boolean'}
     if isinstance(value, int):
         return {'value': value, 'type': 'integer'}
-    if isinstance(value, float):
+    if isinstance(value, float) and math.isfinite(value):
         return {'value': value, 'type': 'double'}
     if not isinstance(value, str):
         value = _safe_repr(value)
