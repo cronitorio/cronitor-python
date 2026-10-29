@@ -28,6 +28,16 @@ def _record(body, level='info'):
     return {'timestamp': 1761768000.5, 'level': level, 'body': body, 'attributes': {}}
 
 
+def _exception_event(exceptions=10, frames=100, line='x' * 1000, extra=None):
+    """An event with a chain of exceptions, each with frames carrying source context."""
+    def frame(n):
+        return {'filename': 'app.py', 'function': 'f%d' % n, 'lineno': n, 'context_line': line,
+                'pre_context': ['p' * 100] * 5, 'post_context': ['q' * 100] * 5}
+    values = [{'type': 'ValueError', 'value': 'v%d' % i, 'stacktrace': {'frames': [frame(n) for n in range(frames)]}}
+              for i in range(exceptions)]
+    return _event(exception={'values': values}, extra=dict(extra or {}))
+
+
 class EnvelopeSerializationTests(unittest.TestCase):
 
     def test_serialize_envelope_layout(self):
@@ -69,6 +79,63 @@ class EnvelopeSerializationTests(unittest.TestCase):
         from datetime import datetime, timezone
         stamp = datetime(2026, 10, 29, 20, 0, 0, 123456, tzinfo=timezone.utc)
         self.assertEqual(ingest.format_timestamp(stamp), '2026-10-29T20:00:00.123456Z')
+
+
+class EventSizeTests(unittest.TestCase):
+    """The server drops event items over 1 MB, so oversized events are trimmed to 900 KB."""
+
+    def setUp(self):
+        self._saved_key = cronitor.api_key
+        cronitor.api_key = FAKE_API_KEY
+        self.send = RecordingSend()
+        self.transport = ingest.Transport(send=self.send)
+
+    def tearDown(self):
+        cronitor.api_key = self._saved_key
+
+    def sent_event(self, event):
+        self.assertTrue(self.transport.submit_event(event))
+        self.assertTrue(self.transport.flush(5.0))
+        item_header, payload = self.send.items('event')[0]
+        self.assertLessEqual(item_header['length'], ingest.MAX_EVENT_BYTES)
+        return payload
+
+    def test_small_event_is_unchanged(self):
+        event = _exception_event(exceptions=1, frames=5, extra={'rows': 3})
+        self.assertEqual(self.sent_event(event), event)
+
+    def test_source_context_is_dropped_first(self):
+        event = _exception_event(line='x' * 200, extra={'rows': 3})
+        self.assertGreater(len(ingest.json_bytes(event)), ingest.MAX_EVENT_BYTES)
+        sent = self.sent_event(event)
+        for value in sent['exception']['values']:
+            frames = value['stacktrace']['frames']
+            self.assertEqual(len(frames), 100)
+            for frame in frames:
+                self.assertNotIn('pre_context', frame)
+                self.assertNotIn('post_context', frame)
+                self.assertEqual(frame['context_line'], 'x' * 200)
+        self.assertEqual(sent['extra'], {'rows': 3, '_trimmed': 'source context dropped: event over 900 KB'})
+
+    def test_huge_extra_is_dropped(self):
+        sent = self.sent_event(_event(message={'formatted': 'hi'}, extra={'blob': 'x' * 2000000, 'rows': 3}))
+        self.assertEqual(sent['extra'], {'_trimmed': 'extra dropped: event over 900 KB'})
+        self.assertEqual(sent['message'], {'formatted': 'hi'})
+
+    def test_frames_are_cut_to_the_last_twenty_per_exception(self):
+        event = _exception_event(extra={'rows': 3})
+        sent = self.sent_event(event)
+        values = sent['exception']['values']
+        self.assertEqual(len(values), 10)
+        for value in values:
+            self.assertEqual([f['function'] for f in value['stacktrace']['frames']],
+                             ['f%d' % n for n in range(80, 100)])
+        self.assertEqual(sent['extra'], {'_trimmed': 'source context dropped; extra dropped; '
+                                                     'frames cut to the last 20 per exception: event over 900 KB'})
+        # the caller's event is left as it was
+        self.assertEqual(event['extra'], {'rows': 3})
+        self.assertEqual(len(event['exception']['values'][0]['stacktrace']['frames']), 100)
+        self.assertIn('pre_context', event['exception']['values'][0]['stacktrace']['frames'][0])
 
 
 class VersionTests(unittest.TestCase):

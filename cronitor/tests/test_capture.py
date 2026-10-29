@@ -236,6 +236,53 @@ class CaptureExceptionTests(CaptureTestCase):
                 self.assertIsNone(cronitor.capture_exception(e))
         self.assertEqual(self.flushed_events(), [])
 
+    def test_huge_extra_is_dropped_to_fit_the_size_limit(self):
+        try:
+            raise ValueError('x')
+        except ValueError as e:
+            event_id = cronitor.capture_exception(e, extra={'blob': 'x' * 2000000})
+        self.assertRegex(event_id, HEX32)
+        event = self.only_event()
+        self.assertEqual(event['extra'], {'_trimmed': 'source context dropped; extra dropped: event over 900 KB'})
+        frame = event['exception']['values'][0]['stacktrace']['frames'][-1]
+        self.assertEqual(frame['context_line'].strip(), "raise ValueError('x')")
+        self.assertNotIn('pre_context', frame)
+
+    def test_many_chained_frames_are_trimmed_to_fit(self):
+        def recurse(n, i):
+            if n == 0:
+                raise ValueError('bottom %d' % i)
+            return recurse(n - 1, i)
+
+        def chain(i):
+            try:
+                recurse(150, i)
+            except ValueError as e:
+                if i == 0:
+                    raise
+                try:
+                    chain(i - 1)
+                except ValueError as cause:
+                    raise e from cause
+
+        try:
+            chain(9)
+        except ValueError as e:
+            # a real chain of short source lines stays well under 900 KB, so lower the limit
+            with patch('cronitor.ingest.MAX_EVENT_BYTES', 60000):
+                cronitor.capture_exception(e, extra={'batch': 42})
+        self.assertTrue(cronitor.flush(2.0))
+        item_header, event = self.send.items('event')[0]
+        self.assertLessEqual(item_header['length'], 60000)
+        values = event['exception']['values']
+        self.assertEqual(len(values), 10)
+        for value in values:
+            frames = value['stacktrace']['frames']
+            self.assertEqual(len(frames), 20)
+            self.assertEqual(frames[-1]['context_line'].strip(), "raise ValueError('bottom %d' % i)")
+        self.assertTrue(event['extra']['_trimmed'].startswith(
+            'source context dropped; extra dropped; frames cut to the last 20 per exception'))
+
 
 class CaptureMessageTests(CaptureTestCase):
 

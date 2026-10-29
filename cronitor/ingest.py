@@ -32,6 +32,9 @@ SEND_TIMEOUT = 5
 SEND_RETRIES = 1
 MAX_RETRY_AFTER = 60.0
 ATEXIT_FLUSH_TIMEOUT = 2.0
+# the server drops event items over 1 MB; oversized events are trimmed to this
+MAX_EVENT_BYTES = 900 * 1024
+TRIMMED_FRAMES = 20
 
 EVENT_CONTENT_TYPE = 'application/json'
 LOG_CONTENT_TYPE = 'application/vnd.sentry.items.log+json'
@@ -132,6 +135,86 @@ def serialize_envelope(headers, items):
     return b''.join(parts)
 
 
+def event_bytes(event):
+    """The event as JSON bytes, trimmed to at most MAX_EVENT_BYTES when possible.
+
+    An oversized event loses, until it fits: every frame's source context, then
+    ``extra``, then all but the last 20 frames of each exception.
+    ``extra['_trimmed']`` says what was dropped. The caller's dict is not changed.
+    """
+    payload = json_bytes(event)
+    if len(payload) <= MAX_EVENT_BYTES:
+        return payload
+    try:
+        event = dict(event)
+        dropped = []
+        for note, trim in _EVENT_TRIMS:
+            if not trim(event):
+                continue
+            dropped.append(note)
+            extra = event.get('extra')
+            extra = dict(extra) if isinstance(extra, dict) else {}
+            extra['_trimmed'] = '%s: event over %d KB' % ('; '.join(dropped), MAX_EVENT_BYTES // 1024)
+            event['extra'] = extra
+            payload = json_bytes(event)
+            if len(payload) <= MAX_EVENT_BYTES:
+                break
+    except Exception as e:
+        logger.warning('Cronitor could not trim an oversized event: %s', e)
+    return payload
+
+
+def _own_frames(event):
+    """Give event its own copies of the exception values and frames, and return the frame lists."""
+    exception = event.get('exception') or {}
+    values, frame_lists = [], []
+    for value in exception.get('values') or []:
+        stacktrace = value.get('stacktrace') or {}
+        if stacktrace.get('frames'):
+            frames = [dict(frame) for frame in stacktrace['frames']]
+            value = dict(value, stacktrace=dict(stacktrace, frames=frames))
+            frame_lists.append(frames)
+        values.append(value)
+    if values:
+        event['exception'] = dict(exception, values=values)
+    return frame_lists
+
+
+def _drop_source_context(event):
+    dropped = False
+    for frames in _own_frames(event):
+        for frame in frames:
+            for key in ('pre_context', 'post_context'):
+                if key in frame:
+                    del frame[key]
+                    dropped = True
+    return dropped
+
+
+def _drop_extra(event):
+    extra = event.get('extra')
+    if not isinstance(extra, dict) or all(key == '_trimmed' for key in extra):
+        return False
+    event['extra'] = {}
+    return True
+
+
+def _keep_last_frames(event):
+    cut = False
+    for frames in _own_frames(event):
+        if len(frames) > TRIMMED_FRAMES:
+            del frames[:-TRIMMED_FRAMES]
+            cut = True
+    return cut
+
+
+_EVENT_TRIMS = (
+    ('source context dropped', _drop_source_context),
+    ('extra dropped', _drop_extra),
+    ('frames cut to the last %d per exception' % TRIMMED_FRAMES, _keep_last_frames),
+)
+
+
 def event_envelope(payload, event_id, sent_at=None):
     headers = {'event_id': event_id, 'sent_at': format_timestamp(sent_at), 'sdk': sdk_info()}
     item = {'type': 'event', 'content_type': EVENT_CONTENT_TYPE}
@@ -195,7 +278,7 @@ class Transport(object):
         api_key = self._api_key(api_key)
         if not api_key:
             return False
-        return self._put(('event', envelope_url(), api_key, event['event_id'], json_bytes(event)))
+        return self._put(('event', envelope_url(), api_key, event['event_id'], event_bytes(event)))
 
     def submit_log(self, record, api_key=None):
         """Queue one log record dict. Returns False when it was not queued."""
