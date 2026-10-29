@@ -142,7 +142,7 @@ cronitor.service = 'billing-api'      # optional, or CRONITOR_SERVICE: the servi
 
 When a function decorated with `@cronitor.job` raises, the `fail` ping is sent as before and an exception event with the full stack trace follows, bound to the same monitor and run. Set `cronitor.capture_exceptions = False` to send only the ping.
 
-Anything captured while the job runs (exceptions, messages, logs) is bound to the monitor and the run automatically.
+Anything captured while the job runs (exceptions, messages, logs) is bound to the monitor and the run automatically. Threads started inside a `@cronitor.job` function do not inherit this binding (it is held in a `ContextVar`), so pass `monitor=` and `series=` explicitly to captures made there; `cronitor.capture.current_job()`, called in the job function, returns both.
 
 #### Capturing exceptions and messages
 
