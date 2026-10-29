@@ -8,6 +8,7 @@ In this guide:
 - [Installation](#Installation)
 - [Monitoring Background Jobs](#monitoring-background-jobs)
 - [Sending Telemetry Events](#sending-telemetry-events)
+- [Exceptions and Logs](#exceptions-and-logs)
 - [Configuring Monitors](#configuring-monitors)
 - [Package Configuration & Env Vars](#package-configuration)
 - [Command Line Usage](#command-line-usage)
@@ -123,6 +124,73 @@ monitor.ping(
     }
 )
 ```
+
+## Exceptions and Logs
+
+Cronitor can store exception events and structured logs next to your monitors. The SDK captures them natively (no extra dependency) and sends them from a background thread, so your code is never slowed down or interrupted by the network: requests time out after 5 seconds, failures are logged as warnings, and nothing is ever raised to your code.
+
+```python
+import cronitor
+
+cronitor.api_key = 'apiKey123'        # a telemetry key is enough
+cronitor.environment = 'production'   # optional
+cronitor.release = '2.4.1'            # optional, or CRONITOR_RELEASE
+```
+
+#### Exceptions inside `@cronitor.job`
+
+When a function decorated with `@cronitor.job` raises, the `fail` ping is sent as before and an exception event with the full stack trace follows, bound to the same monitor and run. Set `cronitor.capture_exceptions = False` to send only the ping.
+
+Anything captured while the job runs (exceptions, messages, logs) is bound to the monitor and the run automatically.
+
+#### Capturing exceptions and messages
+
+```python
+try:
+    import_orders()
+except Exception as e:
+    cronitor.capture_exception(e, monitor='import-orders', tags={'region': 'us-east-1'}, extra={'batch': 42})
+
+cronitor.capture_message('Disk 90% full', level='warning')
+
+# bound to a monitor and its environment
+monitor = cronitor.Monitor('import-orders')
+monitor.capture_exception()   # inside an except block, defaults to the current exception
+```
+
+`capture_exception` and `capture_message` return the event id. Events include the exception chain (`raise ... from ...`), stack frames with five lines of source context, the hostname, release and environment. Local variables are never sent.
+
+#### Structured logs
+
+```python
+cronitor.logger.info('Processed {count} orders for {customer}', count=120, customer='acme')
+cronitor.logger.warning('Retrying', attempt=3)   # also trace, debug, error, fatal
+```
+
+The body is formatted with `str.format`, and the template and parameters are kept as attributes so you can filter on them. Or ship records from the standard `logging` module:
+
+```python
+import logging
+
+logging.getLogger().addHandler(cronitor.LogHandler(level=logging.INFO))
+```
+
+Logs are batched (100 records or 5 seconds). Queued events and logs are flushed when the process exits; call `cronitor.flush(timeout=2.0)` to flush earlier, for example at the end of a serverless handler.
+
+> In 5.0 `cronitor.logger` became this log shipper. The package's own diagnostics still use `logging.getLogger('cronitor')`.
+
+#### Already using the Sentry SDK?
+
+Cronitor accepts the Sentry wire format, so `sentry_sdk` works by changing the DSN. Bind events to a monitor with a tag:
+
+```python
+import sentry_sdk
+
+sentry_sdk.init(dsn='https://{telemetry_key}@cronitor.link/{key_id}')
+sentry_sdk.set_tag('cronitor.monitor', 'nightly-job')
+```
+
+`telemetry_key` is a Cronitor API key with telemetry scope and `key_id` is that key's numeric id.
 
 ## Configuring Monitors
 
@@ -298,6 +366,8 @@ monitor.delete() # destroy the monitor
 ## Package Configuration
 
 The package needs to be configured with your account's `API key`, which is available on the [account settings](https://cronitor.io/settings) page. You can also optionally specify an `api_version` and an `environment`. If not provided, your account default is used. These can also be supplied using the environment variables `CRONITOR_API_KEY`, `CRONITOR_API_VERSION`, `CRONITOR_ENVIRONMENT`.
+
+Telemetry pings, exceptions and logs are sent to `https://cronitor.link` by default. Set `cronitor.ingest_url` or `CRONITOR_INGEST_URL` to send them elsewhere, for example `http://localhost:9100` in development. `cronitor.release` (`CRONITOR_RELEASE`) is attached to exceptions and logs.
 
 ```python
 import cronitor

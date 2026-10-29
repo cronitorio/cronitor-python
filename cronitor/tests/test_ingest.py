@@ -70,6 +70,14 @@ class EnvelopeSerializationTests(unittest.TestCase):
         self.assertEqual(ingest.format_timestamp(stamp), '2026-10-29T20:00:00.123456Z')
 
 
+class VersionTests(unittest.TestCase):
+
+    def test_sdk_version_matches_setup_py(self):
+        with open(os.path.join(REPO_ROOT, 'setup.py')) as f:
+            version = re.search(r"version='([^']+)'", f.read()).group(1)
+        self.assertEqual(ingest.SDK_VERSION, version)
+
+
 class UrlTests(unittest.TestCase):
 
     def setUp(self):
