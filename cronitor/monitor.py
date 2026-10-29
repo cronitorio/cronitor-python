@@ -8,6 +8,7 @@ from yaml.loader import SafeLoader
 
 
 import cronitor
+from .ingest import base_url
 from urllib3.util.retry import Retry
 from requests.adapters import HTTPAdapter
 
@@ -168,6 +169,18 @@ class Monitor(object):
     def ok(self):
         self.ping(state=cronitor.State.OK)
 
+    def capture_exception(self, exc=None, *, series=None, level='error', tags=None, extra=None):
+        """Send an exception event bound to this monitor and its environment."""
+        from .capture import _capture_exception
+        return _capture_exception(exc, monitor=self.key, series=series, level=level, tags=tags,
+                                  extra=extra, env=self.env, api_key=self.api_key)
+
+    def capture_message(self, message, level='info', *, series=None, tags=None, extra=None):
+        """Send a message event bound to this monitor and its environment."""
+        from .capture import _capture_message
+        return _capture_message(message, level=level, monitor=self.key, series=series, tags=tags,
+                                extra=extra, env=self.env, api_key=self.api_key)
+
     def pause(self, hours):
         if not self.api_key:
             logger.error('No API key detected. Set cronitor.api_key or initialize Monitor with kwarg api_key.')
@@ -207,7 +220,7 @@ class Monitor(object):
         }
 
     def _ping_api_url(self):
-        return "https://cronitor.link/p/{}/{}".format(self.api_key, self.key)
+        return "{}/p/{}/{}".format(base_url(), self.api_key, self.key)
 
     @classmethod
     def list(cls, keys=None, page=1, pageSize=100, auto_paginate=False, **filters):
