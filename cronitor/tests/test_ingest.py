@@ -325,3 +325,74 @@ class ModuleTransportTests(unittest.TestCase):
                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30)
         self.assertEqual(out.returncode, 0, out.stderr)
         self.assertEqual(out.stdout.decode().strip(), 'SENT 3')
+
+
+class LocalCollectorTests(unittest.TestCase):
+    """The default requests-based send path against a loopback HTTP server."""
+
+    def setUp(self):
+        from http.server import BaseHTTPRequestHandler, HTTPServer
+
+        received = self.received = []
+        statuses = self.statuses = []
+
+        class Handler(BaseHTTPRequestHandler):
+            def _record(self):
+                length = int(self.headers.get('Content-Length') or 0)
+                received.append((self.command, self.path, dict(self.headers), self.rfile.read(length)))
+                status, headers = statuses.pop(0) if statuses else (200, {})
+                self.send_response(status)
+                for name, value in headers.items():
+                    self.send_header(name, value)
+                self.send_header('Content-Length', '2')
+                self.end_headers()
+                self.wfile.write(b'{}')
+
+            do_GET = do_POST = _record
+
+            def log_message(self, *args):
+                pass
+
+        self.server = HTTPServer(('127.0.0.1', 0), Handler)
+        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+        self._saved = (cronitor.api_key, cronitor.ingest_url)
+        cronitor.api_key = FAKE_API_KEY
+        cronitor.ingest_url = 'http://127.0.0.1:%d' % self.server.server_port
+        no_proxy = '127.0.0.1,' + os.environ.get('NO_PROXY', os.environ.get('no_proxy', ''))
+        env = patch.dict(os.environ, {'NO_PROXY': no_proxy, 'no_proxy': no_proxy})
+        env.start()
+        self.addCleanup(env.stop)
+
+    def tearDown(self):
+        self.server.shutdown()
+        self.server.server_close()
+        cronitor.api_key, cronitor.ingest_url = self._saved
+
+    def test_envelopes_and_pings_reach_the_ingest_url(self):
+        sleeps = []
+        transport = ingest.Transport(sleep=sleeps.append)
+        self.statuses.extend([(200, {}), (429, {'Retry-After': '3'}), (200, {})])
+        transport.submit_event(_event('1' * 32))
+        transport.submit_event(_event('2' * 32))
+        with self.assertLogs('cronitor.ingest', 'WARNING'):
+            self.assertTrue(transport.flush(5.0))
+        transport.submit_log(_record('after 429'))
+        self.assertTrue(transport.flush(5.0))
+
+        self.assertEqual(len(self.received), 3)
+        method, path, headers, body = self.received[0]
+        self.assertEqual((method, path), ('POST', '/api/envelope'))
+        self.assertEqual(headers['Content-Type'], 'application/x-sentry-envelope')
+        self.assertEqual(headers['Content-Encoding'], 'gzip')
+        self.assertEqual(headers['User-Agent'], 'cronitor-python')
+        self.assertTrue(headers['X-Sentry-Auth'].startswith('Sentry sentry_key=%s, sentry_version=7,' % FAKE_API_KEY))
+        header, items = parse_envelope(body)
+        self.assertEqual(header['event_id'], '1' * 32)
+        self.assertEqual(len(sleeps), 1)
+        self.assertAlmostEqual(sleeps[0], 3, delta=1)
+        self.assertEqual(parse_envelope(self.received[2][3])[1][0][1]['items'][0]['body'], 'after 429')
+
+        cronitor.Monitor('local-job').ping(state='run')
+        method, path, _, _ = self.received[3]
+        self.assertEqual(method, 'GET')
+        self.assertTrue(path.startswith('/p/%s/local-job?' % FAKE_API_KEY), path)
