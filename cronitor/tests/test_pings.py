@@ -70,6 +70,11 @@ class PingDecoratorTests(unittest.TestCase):
 
     def setUp(self):
         cronitor.api_key = FAKE_API_KEY
+        # the decorator also captures exceptions; keep them off the network
+        self._transport = cronitor.ingest.set_transport(cronitor.ingest.Transport(send=MagicMock()))
+
+    def tearDown(self):
+        cronitor.ingest.set_transport(self._transport)
 
     @patch('cronitor.Monitor.ping')
     def test_ping_wraps_function_success(self, mocked_ping):

@@ -10,9 +10,13 @@ import atexit
 import threading
 
 from .monitor import Monitor, YAML
+from . import capture, ingest
+from .ingest import flush
+from .capture import capture_exception, capture_message, logger, LogHandler
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+# the package's own diagnostics; `cronitor.logger` ships structured logs to Cronitor
+_logger = logging.getLogger(__name__)
+_logger.setLevel(logging.INFO)
 
 # configuration variables
 api_key = os.getenv('CRONITOR_API_KEY', None)
@@ -22,6 +26,15 @@ config = os.getenv('CRONITOR_CONFIG', None)
 timeout = os.getenv('CRONITOR_TIMEOUT', None)
 if timeout is not None:
     timeout = int(timeout)
+
+# base URL for telemetry pings and exception/log envelopes, e.g. http://localhost:9100 in development
+ingest_url = os.getenv('CRONITOR_INGEST_URL') or ingest.DEFAULT_INGEST_URL
+# attached to exception events and logs
+release = os.getenv('CRONITOR_RELEASE', None)
+# service monitor key that exception events and logs belong to, unless a call names another
+service = os.getenv('CRONITOR_SERVICE', None)
+# send an exception event when a function decorated with @cronitor.job raises
+capture_exceptions = True
 
 celerybeat_only = False
 
@@ -54,6 +67,15 @@ class State(object):
     COMPLETE = 'complete'
     FAIL = 'fail'
 
+def _safe_ping(monitor, **params):
+    """Pings are best effort: a telemetry outage must never stop or fail the job."""
+    try:
+        return monitor.ping(**params)
+    except Exception as e:  # noqa: BLE001 - any transport error is swallowed on purpose
+        _logger.warning('Cronitor could not send the %s ping for %s: %s', params.get('state'), monitor.key, e)
+        return None
+
+
 # include_output is deprecated in favor of log_output and can be removed in 5.0 release
 def job(key, env=None, log_output=True, include_output=True, attributes=None):
 
@@ -68,17 +90,25 @@ def job(key, env=None, log_output=True, include_output=True, attributes=None):
 
             monitor = Monitor(key, env=env)
             # use start as the series param to match run/fail/complete correctly
-            monitor.ping(state=State.RUN, series=start)
+            _safe_ping(monitor, state=State.RUN, series=start)
+            # exceptions and logs captured while the function runs are bound to this run
+            job_env = env or this.environment
+            token = capture.bind_job(key, start, job_env)
             try:
                 out = func(*args, **kwargs)
             except Exception as e:
                 duration = datetime.now().timestamp() - start
-                monitor.ping(state=State.FAIL, message=str(e), metrics={'duration': duration}, series=start)
+                _safe_ping(monitor, state=State.FAIL, message=str(e), metrics={'duration': duration}, series=start)
+                if this.capture_exceptions:
+                    capture._capture_exception(e, monitor=key, series=start, env=job_env,
+                                               mechanism='cronitor.job', handled=False)
                 raise e
+            finally:
+                capture.unbind_job(token)
 
             duration = datetime.now().timestamp() - start
             message = str(out) if all([log_output, include_output]) else None
-            monitor.ping(state=State.COMPLETE, message=message, metrics={'duration': duration}, series=start)
+            _safe_ping(monitor, state=State.COMPLETE, message=message, metrics={'duration': duration}, series=start)
             return out
 
         return wrapped
@@ -103,10 +133,10 @@ def apply_config(rollback=False):
         check_count = len(monitors.get('checks', []))
         heartbeat_count = len(monitors.get('heartbeats', []))
         total_count = sum([job_count, check_count, heartbeat_count])
-        logger.info('{} monitor{} {}'.format(total_count, 's' if total_count != 1 else '', 'validated.' if rollback else 'synced.',))
+        _logger.info('{} monitor{} {}'.format(total_count, 's' if total_count != 1 else '', 'validated.' if rollback else 'synced.',))
         return True
     except (yaml.YAMLError, ConfigValidationError, APIValidationError, APIError, AuthenticationError) as e:
-        logger.error(e)
+        _logger.error(e)
         return False
 
 def read_config(path=None, output=False):
